@@ -1,18 +1,12 @@
 {
   "domain": "mibox_socket",
   "name": "Mibox Socket",
-  "documentation": "https://",
+  "version": "1.0.1",
+  "documentation": "https://github.com/DenizOner/mibox_socket",
+  "issue_tracker": "https://github.com/DenizOner/mibox_socket/issues",
   "dependencies": [],
-  "codeowners": [],
-  "requirements": [],
-  "version": "1.0",
-  "issues": {
-    "name": "Issues",
-    "url": "https://github.com/frlequ/mibox_socket/issues",
-    "tracker": "github",
-    "description": "Please file all issues on GitHub."
-  },
-  "quality_scale": "gold",
-  "integration_manifest": "mibox_socket",
-  "zeroconf": []
+  "requirements": ["pexpect"],
+  "codeowners": ["@DenizOner, @ChatGPT, @frlequ"],
+  "config_flow": true,
+  "iot_class": "local_polling"
 }
