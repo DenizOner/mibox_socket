@@ -26,9 +26,6 @@ Mibox Socket — Home Assistant integration using bluetooth pairing (bluetoothct
 - Pairing may take up to ~15-30 seconds depending on environment.
 - If pairing fails, check host Bluetooth, permissions, and that Mibox is reachable.
 
-## License
-Repository owner has granted permission for fork/redistribution. (Add explicit license file if you and repo owner agree; MIT/Apache recommended.)
-
 ## Issues
-
 Use GitHub issues for bug reports.
+
