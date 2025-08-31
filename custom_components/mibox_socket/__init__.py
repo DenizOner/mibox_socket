@@ -1,4 +1,4 @@
-"""Integration entry points for Mibox Socket."""
+"""Integration entry points for Mibox Socket (fixed to use async_forward_entry_setup)."""
 
 from __future__ import annotations
 
@@ -17,8 +17,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = entry.data
 
-    # Yüklenecek platformlar (switch)
-    hass.config_entries.async_setup_platforms(entry, ["switch"])
+    # Eski hata buradan geliyordu: async_setup_platforms yerine async_forward_entry_setup kullanılmalı.
+    # Her platform için forward yapıyoruz (switch).
+    await hass.config_entries.async_forward_entry_setup(entry, "switch")
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
