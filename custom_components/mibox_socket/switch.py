@@ -1,14 +1,10 @@
-"""Switch entity for Mibox Socket.
-
-Bu switch tetiklendiğinde bluetoothctl ile pairing sekansını çalıştırır.
-Pairing blocking/IO-bound bir işlem olduğundan executor içinde çalıştırılır.
-"""
+"""Switch entity for Mibox Socket with device-linked state detection."""
 
 from __future__ import annotations
 
 import logging
 import shutil
-from typing import Any
+from typing import Any, List
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
@@ -16,39 +12,38 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import CONF_MAC, CONF_NAME
 
+from homeassistant.helpers import entity_registry as er
+
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# Pairing işlemi için bekleme süreleri
-SCAN_TIMEOUT = 15  # cihazın taramada görünmesi için bekleme (saniye)
-PAIRING_TIMEOUT = 30  # pairing işleminin tamamlanması için bekleme (saniye)
+SCAN_TIMEOUT = 15
+PAIRING_TIMEOUT = 30
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
-    """Config entry için entity ekle."""
+    """Config entry için entity ekle. Pass device_id if present."""
     data = entry.data
     name = data.get(CONF_NAME)
     mac = data.get(CONF_MAC)
+    device_id = data.get("device_id")  # may be None
 
-    async_add_entities([MiBoxSocketSwitch(hass, entry.entry_id, name, mac)], True)
+    async_add_entities([MiBoxSocketSwitch(hass, entry.entry_id, name, mac, device_id)], True)
 
 
 class MiBoxSocketSwitch(SwitchEntity):
-    """Mibox Socket switch entity."""
+    """Mibox Socket switch entity with optional device_id for state detection."""
 
-    def __init__(self, hass: HomeAssistant, entry_id: str, name: str, mac: str) -> None:
-        """Nesne yaratma ve başlangıç ayarları."""
+    def __init__(self, hass: HomeAssistant, entry_id: str, name: str, mac: str, device_id: str | None = None) -> None:
         self.hass = hass
         self._entry_id = entry_id
         self._name = name
         self._mac = mac.upper()
+        self._device_id = device_id
         self._available = True
         self._is_on = False
-
-        # unique_id -> domain + mac
         self._attr_unique_id = f"mibox_{self._mac.replace(':', '')}"
 
-        # Device registry'de görünmesi için device_info
         self._device_info = {
             "identifiers": {(DOMAIN, self._mac)},
             "name": self._name,
@@ -58,36 +53,59 @@ class MiBoxSocketSwitch(SwitchEntity):
 
     @property
     def device_info(self) -> dict:
-        """Device registry metadata."""
         return self._device_info
 
     @property
     def name(self) -> str:
-        """Entity name."""
         return self._name
 
     @property
     def available(self) -> bool:
-        """Entity uygunluğu (host/donanım)."""
         return self._available
+
+    def _get_device_entity_ids(self) -> List[str]:
+        """Return list of entity_ids associated with stored device_id."""
+        if not self._device_id:
+            return []
+        registry = er.async_get(self.hass)
+        # Collect entity_ids that have this device_id
+        entity_ids: List[str] = []
+        for ent in registry.entities.values():
+            if ent.device_id == self._device_id:
+                entity_ids.append(ent.entity_id)
+        return entity_ids
+
+    def _device_is_on(self) -> bool:
+        """Check HA states for any entity attached to the device_id that indicate 'on'."""
+        if not self._device_id:
+            return False
+        entity_ids = self._get_device_entity_ids()
+        for entity_id in entity_ids:
+            state = self.hass.states.get(entity_id)
+            if state is None:
+                continue
+            # Common 'on' states for media_player: 'on', 'playing'
+            if state.state in ("on", "playing", "active"):
+                return True
+        return False
 
     @property
     def is_on(self) -> bool:
-        """Switch durumu."""
+        """If device_id present, use HA device state; otherwise use internal momentary state."""
+        if self._device_id:
+            return self._device_is_on()
         return self._is_on
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Switch ON tetiklendiğinde pairing işlemini başlat."""
-        # bluetoothctl var mı kontrolü
+        """Trigger pairing (turn on action)."""
         if not shutil.which("bluetoothctl"):
             _LOGGER.error("bluetoothctl bulunamadi. Host'unuzda BlueZ/ bluetoothctl yüklü olmalı.")
             return
 
-        # UI'de geçici ON göster
+        # user sees ON while pairing runs
         self._is_on = True
         self.async_write_ha_state()
 
-        # Blocking pairing fonksiyonunu executor içinde çalıştır
         try:
             success = await self.hass.async_add_executor_job(self._pair_device_blocking, self._mac)
             if success:
@@ -97,31 +115,21 @@ class MiBoxSocketSwitch(SwitchEntity):
         except Exception as exc:
             _LOGGER.exception("Pairing sırasında beklenmeyen hata: %s", exc)
         finally:
-            # Anlık tetikleme mantığı: işlem tamamlandığında switch'i tekrar kapalı göster
+            # pairing tamamlandıktan sonra, eğer device_id varsa gerçek durumu HA üzerinden al
+            if self._device_id:
+                # small delay not added; rely on HA state updates that may come from integration
+                pass
             self._is_on = False
             self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Switch OFF: Bu entegrasyonda gerçek 'off' operasyonu yok; UI için state toggle yapıyoruz."""
+        """No specific unpair functionality implemented (for now)."""
         self._is_on = False
         self.async_write_ha_state()
 
     def _pair_device_blocking(self, mac: str) -> bool:
-        """Blocking pairing süreci (pexpect ile bluetoothctl).
-
-        Bu fonksiyon executor içinde çalıştırılır; burada sync/IO koda izin var.
-
-        Mantık:
-        1. bluetoothctl spawn
-        2. agent NoInputNoOutput + default-agent (bazı cihazlar PIN istemez)
-        3. scan on -> cihazın MAC çıktıda görünmesini bekle
-        4. pair <MAC> -> pairing sonucu için çeşitli pattern'ler bekle
-        5. pairing başarılıysa trust <MAC> (opsiyonel)
-        6. scan off -> kapanış
-        """
+        """Blocking pairing logic (pexpect)."""
         try:
-            # pexpect import'u fonksiyon içinde: manifest'teki requirement yüklü değilse
-            # modül import hatası tüm entegrasyonu bozmamalı
             import pexpect  # type: ignore
         except Exception as e:
             _LOGGER.exception("pexpect import edilemedi: %s", e)
@@ -134,12 +142,10 @@ class MiBoxSocketSwitch(SwitchEntity):
             return False
 
         try:
-            # Agent oluştur ve default-agent yap (PIN gerekmeyen eşleşme için)
             try:
                 child.sendline("agent NoInputNoOutput")
                 child.expect(["Agent registered", pexpect.TIMEOUT], timeout=5)
             except Exception:
-                # Bazı bluetoothctl versiyonlarında farklı çıktı olabilir; fail etmiyoruz.
                 pass
 
             try:
@@ -147,16 +153,11 @@ class MiBoxSocketSwitch(SwitchEntity):
             except Exception:
                 pass
 
-            # Taramayı başlat
             child.sendline("scan on")
 
-            # Cihazın taramada görünmesini bekle (MAC içeren satır)
             found = False
             try:
-                # 15s içinde MAC içeren bir satır gözükürse devam et
                 child.expect([mac, pexpect.TIMEOUT], timeout=SCAN_TIMEOUT)
-                # Eğer ilk pattern (mac) yakalandıysa found True olur.
-                # pexpect.match veya index kontrolü zor; basitça çıktı kontrolü ile devam ediyoruz.
                 found = mac in child.before or mac in child.after
             except pexpect.TIMEOUT:
                 found = False
@@ -170,12 +171,8 @@ class MiBoxSocketSwitch(SwitchEntity):
                 child.close()
                 return False
 
-            # Pair komutu
             child.sendline(f"pair {mac}")
 
-            # Pairing sonucu için olası pattern'ler (case-insensitive benzeri)
-            # Başarılı: "Pairing successful", "Paired: yes"
-            # Hatalar: "Failed to pair", "AuthenticationFailed", "AlreadyExists"
             try:
                 idx = child.expect(
                     [
@@ -188,9 +185,7 @@ class MiBoxSocketSwitch(SwitchEntity):
                     ],
                     timeout=PAIRING_TIMEOUT,
                 )
-                # idx 0 veya 1 -> başarılı
                 if idx in (0, 1):
-                    # Güvenilirlik için trust et
                     try:
                         child.sendline(f"trust {mac}")
                     except Exception:
