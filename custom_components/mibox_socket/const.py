@@ -1,1 +1,0 @@
-DOMAIN = "mibox_socket"
