@@ -12,14 +12,13 @@
       }
     }
   },
+  "issues": {
+    "no_bluetoothctl": "Host'ta bluetoothctl bulunamadı. BlueZ'in yüklü olduğundan ve Home Assistant'ın bluetoothctl'e erişebildiğinden emin olun.",
+    "invalid_mac": "Geçersiz MAC formatı. AA:BB:CC:11:22:33 formatını kullanın."
+  },
   "entity": {
     "switch": {
-      "mibox_socket_switch": {
-        "name": "Mibox Socket"
-      }
+      "name": "Mibox Socket"
     }
-  },
-  "issues": {
-    "no_bluetoothctl": "Host'ta bluetoothctl bulunamadı. BlueZ'in yüklü olduğundan ve Home Assistant'ın bluetoothctl'e erişebildiğinden emin olun."
   }
 }
