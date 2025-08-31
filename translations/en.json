@@ -12,14 +12,13 @@
       }
     }
   },
+  "issues": {
+    "no_bluetoothctl": "bluetoothctl not found on host. Ensure BlueZ is installed and Home Assistant has access to bluetoothctl.",
+    "invalid_mac": "Invalid MAC address format. Use AA:BB:CC:11:22:33."
+  },
   "entity": {
     "switch": {
-      "mibox_socket_switch": {
-        "name": "Mibox Socket"
-      }
+      "name": "Mibox Socket"
     }
-  },
-  "issues": {
-    "no_bluetoothctl": "bluetoothctl not found on host. Ensure BlueZ is installed and Home Assistant has access to bluetoothctl."
   }
 }
