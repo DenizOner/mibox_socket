@@ -8,6 +8,8 @@
         "data": {
           "name": "Device name",
           "mac": "Bluetooth MAC address (AA:BB:CC:11:22:33)",
+          "bluetooth_mac": "Bluetooth MAC Address",
+          "device_id": "Linked Home Assistant Device"
           "method": "Configuration method",
           "device": "Select Home Assistant device"
         }
@@ -25,3 +27,4 @@
     }
   }
 }
+
