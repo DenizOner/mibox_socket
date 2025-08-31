@@ -1,10 +1,10 @@
 # Mibox Socket
 
-Mibox Socket — Xiaomi Mibox cihazını uzaktan kumanda olmadan "açmak" için bluetooth pairing (bluetoothctl) kullanan Home Assistant integration.
+Mibox Socket — Home Assistant integration using bluetooth pairing (bluetoothctl) to “turn on” the Xiaomi Mibox device without a remote control.
 
 ## Features
-- UI üzerinden konfigürasyon (MAC + isim)
-- HACS uyumlu (custom repository olarak eklenebilir)
+- Configuration via UI (MAC + name)
+- HACS compatible (can be added as a custom repository)
 - English default, Turkish translations included
 
 ## Requirements
@@ -30,4 +30,5 @@ Mibox Socket — Xiaomi Mibox cihazını uzaktan kumanda olmadan "açmak" için 
 Repository owner has granted permission for fork/redistribution. (Add explicit license file if you and repo owner agree; MIT/Apache recommended.)
 
 ## Issues
+
 Use GitHub issues for bug reports.
