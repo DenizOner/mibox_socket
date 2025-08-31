@@ -25,8 +25,5 @@ Mibox Socket — Xiaomi Mibox cihazını uzaktan kumanda olmadan "açmak" için 
 - Pairing sırasında cihaz ekranında pairing bildirimi çıkabilir; kullanıcı iptal ederse pairing başarısız olur.
 - Eğer pairing sürekli başarısızsa, `bluetoothctl` çıktısını alıp bana gönder; pattern'leri güncelleyip anında düzelteceğim.
 
-## License
-Sahip tarafından izin verildi — repo sahibi ile anlaştığınız lisans şartlarını README/FILE içine ekleyebilirsiniz (örn. MIT).
-
 ## Issues
 Bug report için GitHub issues kullanın.
