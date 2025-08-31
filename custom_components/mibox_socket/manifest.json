@@ -1,7 +1,7 @@
 {
   "domain": "mibox_socket",
   "name": "Mibox Socket",
-  "version": "1.0.3",
+  "version": "v1.0.3-alpha",
   "documentation": "https://github.com/DenizOner/mibox_socket",
   "issue_tracker": "https://github.com/DenizOner/mibox_socket/issues",
   "dependencies": [],
@@ -11,5 +11,6 @@
   "config_flow": true,
   "iot_class": "assumed_state"
 }
+
 
 
