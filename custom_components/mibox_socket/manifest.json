@@ -7,6 +7,8 @@
   "dependencies": [],
   "requirements": ["pexpect"],
   "codeowners": ["@frlequ", "@ChatGPT", "@DenizOner"],
+  "translations": "translations"
   "config_flow": true,
   "iot_class": "assumed_state"
 }
+
