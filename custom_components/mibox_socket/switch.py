@@ -1,7 +1,7 @@
 """custom_components/mibox_socket/switch.py
 
-Güncellenmiş: hem device_id hem de media_player_entity_id destekler.
-Genişletilmiş debug logları içerir — hangi config verisi saklandı, hangi entity'ler bulundu vb.
+Güncelleme: eğer entry.data['name'] bir media_player entity id'si ise
+bunu media_player_entity_id olarak kullanır ve switch'in display adını düzeltir.
 """
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import shutil
 from typing import Any, List, Callable, Optional
+import re
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
@@ -25,20 +26,35 @@ _LOGGER = logging.getLogger(__name__)
 SCAN_TIMEOUT = 15
 PAIRING_TIMEOUT = 30
 
+ENTITY_ID_RE = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
-    """Config entry için entity ekle. entry.data içeriğini debug olarak yazdır."""
-    _LOGGER.debug("MiBoxSocket async_setup_entry: entry_id=%s data=%s", entry.entry_id, entry.data)
+    """Config entry için entity ekle ve entry.data içeriğini akıllıca işle."""
     data = entry.data or {}
-    name = data.get(CONF_NAME) or f"mibox_{data.get(CONF_MAC, '')}"
+    raw_name = data.get(CONF_NAME) or ""
     mac = data.get(CONF_MAC)
-    # Bazı eski/kullanıcı varyasyonları: 'media_player' veya 'media_player_entity_id' veya 'device_id'
+    # Bazı eski/kullanıcı varyasyonları: 'media_player' veya 'media_player_entity_id'
     media_player_entity_id = data.get("media_player") or data.get("media_player_entity_id")
-    device_id = data.get("device_id")
-    # Debug: hangi alanlar bulundu
-    _LOGGER.debug("MiBoxSocket setup values: name=%s mac=%s media_player=%s device_id=%s", name, mac, media_player_entity_id, device_id)
 
-    async_add_entities([MiBoxSocketSwitch(hass, entry.entry_id, name, mac, device_id, media_player_entity_id)], True)
+    # Eğer media_player bilgisi yoksa ve name bir entity_id pattern'ine uyuyorsa,
+    # name muhtemelen media_player olarak kaydedilmiş — bunu kullan.
+    display_name = raw_name or f"mibox_{(mac or '')}"
+    if not media_player_entity_id and isinstance(raw_name, str) and raw_name.startswith("media_player.") and ENTITY_ID_RE.match(raw_name):
+        media_player_entity_id = raw_name
+        # display_name'i daha kullanıcı-dostu yap: "MiBox (felix...)" veya MAC'in son kısmı
+        if mac:
+            display_name = f"MiBox {mac[-5:].replace(':', '')}"
+        else:
+            # entity id'den okunabilir bölüm çıkar (ör. media_player.felix_s_mi_box_4 -> felix_s_mi_box_4)
+            display_name = "MiBox " + raw_name.split(".", 1)[1]
+
+    _LOGGER.debug(
+        "MiBoxSocket async_setup_entry: entry_id=%s raw_name=%s -> display_name=%s media_player=%s mac=%s",
+        entry.entry_id, raw_name, display_name, media_player_entity_id, mac
+    )
+
+    async_add_entities([MiBoxSocketSwitch(hass, entry.entry_id, display_name, mac, device_id=data.get("device_id"), media_player_entity_id=media_player_entity_id)], True)
 
 
 class MiBoxSocketSwitch(SwitchEntity):
@@ -89,7 +105,7 @@ class MiBoxSocketSwitch(SwitchEntity):
     def _device_is_on(self) -> bool:
         """
         Device id veya media_player_entity_id üzerinden on/playing/active kontrolleri yap.
-        Hangi entity'nin hangı durumda olduğu loglanır.
+        Hangi entity'nin hangi durumda olduğu loglanır.
         """
         # Öncelik: açıkça verilen media_player_entity_id
         if self._media_player_entity_id:
@@ -116,10 +132,7 @@ class MiBoxSocketSwitch(SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        """
-        Eğer device veya media_player tanımlıysa HA'daki gerçek durumu döndürür.
-        Eğer tanımlı değilse internal momentary state döner.
-        """
+        """Eğer media_player veya device_id tanımlıysa HA'daki gerçek durumu döndürür."""
         if self._device_id or self._media_player_entity_id:
             try:
                 val = self._device_is_on()
@@ -161,7 +174,7 @@ class MiBoxSocketSwitch(SwitchEntity):
         self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Switch ON talebi geldiğinde önce device/media_player durumuna bak, açıksa pairing atlama."""
+        """Switch ON talebi geldiğinde önce device/media_player durumuna bak, açıksa pairing/komut atlama."""
         _LOGGER.debug("MiBoxSocket: turn_on çağrısı (mac=%s device_id=%s media_player_entity=%s)", self._mac, self._device_id, self._media_player_entity_id)
 
         # Eğer bağlı cihaz zaten açık görünüyorsa pairing gönderme
