@@ -1,0 +1,8 @@
+{
+  "name": "Mibox Socket",
+  "content_in_root": false,
+  "domains": ["mibox_socket"],
+  "homeassistant": "2021.12.0",
+  "zip_release": false,
+  "render_readme": true
+}

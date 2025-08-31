@@ -1,0 +1,25 @@
+{
+  "title": "Mibox Socket",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure Mibox Socket",
+        "description": "Enter the Bluetooth MAC address of your Mibox and a name.",
+        "data": {
+          "name": "Device name",
+          "mac": "Bluetooth MAC address (AA:BB:CC:11:22:33)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "mibox_socket_switch": {
+        "name": "Mibox Socket"
+      }
+    }
+  },
+  "issues": {
+    "no_bluetoothctl": "bluetoothctl not found on host. Ensure BlueZ is installed and Home Assistant has access to bluetoothctl."
+  }
+}

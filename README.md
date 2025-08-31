@@ -1,30 +1,33 @@
 # Mibox Socket
 
-The Xiaomi Mibox socket is a simple integration for Home Assistant that turns ON the Mibox without requiring the remote control. It uses the `bluetoothctl` tool as the base pairing method wrapped in the `Pexpect` spawning module.
+Mibox Socket — Xiaomi Mibox cihazını uzaktan kumanda olmadan "açmak" için bluetooth pairing (bluetoothctl) kullanan Home Assistant integration.
 
-## Hardware
-It utilizes the default built-in Bluetooth device on the RPI4 to connect to the Xiaomi Mibox. It has not been tested with BT dongles.
+## Features
+- UI üzerinden konfigürasyon (MAC + isim)
+- HACS uyumlu (custom repository olarak eklenebilir)
+- English default, Turkish translations included
 
-## Why
-While turning the Mibox off can be done easily with an ADB command, turning it ON is only possible with the remote control, because device goes into deep sleep. This component addresses this limitation by using the `bluetoothctl` `bluetooth pair` command. Note that this is still just a workaround.
+## Requirements
+- Host system must have `bluetoothctl` (BlueZ). On Raspberry Pi OS and many Linux distros this is available.
+- Home Assistant must run on a host/container that has access to bluetooth stack (DBus/BlueZ). In some container setups you may need to mount `/run/dbus` and provide device permissions.
 
-## How
-Before using the Mibox Socket HA integration, ensure that your RPI is not already paired with the Mibox. If it is, unpair it on the Mibox device itself. `Bluetoothctl` is used because it needs to scan for devices first. Once the device is found, the `pair` process can be called. The `Pexpect` module is used to ensure the sequence is followed in order. It takes about 15 secons to complete the sequence and to wake up Mibox.
+## Installation (manual)
+1. In your repository create the directory structure `custom_components/mibox_socket` and add the files from this repo.
+2. Restart Home Assistant.
+3. Go to Settings -> Devices & Services -> Add Integration -> search "Mibox Socket" and add. Enter MAC and name.
 
-## Note
-Don't use switch while Mibox is ON, or you'll get an paring message on screen. If you do, just cancel the paring.
+## Installation (via HACS)
+1. In HACS -> Integrations -> three dots (top right) -> Custom repositories -> Add your repo URL `https://github.com/DenizOner/mibox_socket`, type: `Integration`.
+2. After HACS imports it, go to Integrations and install.
+3. Restart Home Assistant if required.
 
-## Home Assistant Setup
-1. Copy the content to the `custom_components` directory.
-2. In the `configuration.yaml` file add:
+## Usage notes
+- Do not trigger the switch while the Mibox is already ON — this may show pairing dialog on-screen. If that happens, cancel pairing on the TV.
+- Pairing may take up to ~15-30 seconds depending on environment.
+- If pairing fails, check host Bluetooth, permissions, and that Mibox is reachable.
 
-    ```yaml
-    switch:
-      - platform: mibox_socket
-        device:
-          mac: "XX:XX:XX:XX:XX:XX"
-    ```
+## License
+Repository owner has granted permission for fork/redistribution. (Add explicit license file if you and repo owner agree; MIT/Apache recommended.)
 
-3. Replace "XX:XX:XX:XX:XX:XX" with the Bluetooth MAC of the Mibox.
-4. Restart Home Assistant.
-5. The component will create a `switch.mibox_socket_switch` entity. Use it to turn your Mibox ON.
+## Issues
+Use GitHub issues for bug reports.

@@ -1,0 +1,25 @@
+{
+  "title": "Mibox Socket",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Mibox Socket yapılandırması",
+        "description": "Mibox cihazınızın Bluetooth MAC adresini ve bir isim girin.",
+        "data": {
+          "name": "Cihaz ismi",
+          "mac": "Bluetooth MAC adresi (AA:BB:CC:11:22:33)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "mibox_socket_switch": {
+        "name": "Mibox Socket"
+      }
+    }
+  },
+  "issues": {
+    "no_bluetoothctl": "Host'ta bluetoothctl bulunamadı. BlueZ'in yüklü olduğundan ve Home Assistant'ın bluetoothctl'e erişebildiğinden emin olun."
+  }
+}
