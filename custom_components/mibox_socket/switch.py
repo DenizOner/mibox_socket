@@ -1,9 +1,14 @@
-"""Switch entity for Mibox Socket with device-linked state detection."""
+"""custom_components/mibox_socket/switch.py
+
+Güncellenmiş: hem device_id hem de media_player_entity_id destekler.
+Genişletilmiş debug logları içerir — hangi config verisi saklandı, hangi entity'ler bulundu vb.
+"""
+
 from __future__ import annotations
 
 import logging
 import shutil
-from typing import Any, List, Callable
+from typing import Any, List, Callable, Optional
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
@@ -21,40 +26,41 @@ SCAN_TIMEOUT = 15
 PAIRING_TIMEOUT = 30
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-):
-    """Config entry için entity ekle. Pass device_id if present."""
-    data = entry.data
-    name = data.get(CONF_NAME)
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
+    """Config entry için entity ekle. entry.data içeriğini debug olarak yazdır."""
+    _LOGGER.debug("MiBoxSocket async_setup_entry: entry_id=%s data=%s", entry.entry_id, entry.data)
+    data = entry.data or {}
+    name = data.get(CONF_NAME) or f"mibox_{data.get(CONF_MAC, '')}"
     mac = data.get(CONF_MAC)
-    device_id = data.get("device_id")  # may be None
-    async_add_entities([MiBoxSocketSwitch(hass, entry.entry_id, name, mac, device_id)], True)
+    # Bazı eski/kullanıcı varyasyonları: 'media_player' veya 'media_player_entity_id' veya 'device_id'
+    media_player_entity_id = data.get("media_player") or data.get("media_player_entity_id")
+    device_id = data.get("device_id")
+    # Debug: hangi alanlar bulundu
+    _LOGGER.debug("MiBoxSocket setup values: name=%s mac=%s media_player=%s device_id=%s", name, mac, media_player_entity_id, device_id)
+
+    async_add_entities([MiBoxSocketSwitch(hass, entry.entry_id, name, mac, device_id, media_player_entity_id)], True)
 
 
 class MiBoxSocketSwitch(SwitchEntity):
-    """Mibox Socket switch entity with optional device_id for state detection."""
+    """Mibox Socket switch entity with robust detection (device_id or media_player entity)."""
 
-    def __init__(
-        self, hass: HomeAssistant, entry_id: str, name: str, mac: str, device_id: str | None = None
-    ) -> None:
+    def __init__(self, hass: HomeAssistant, entry_id: str, name: str, mac: Optional[str], device_id: Optional[str] = None, media_player_entity_id: Optional[str] = None) -> None:
         self.hass = hass
         self._entry_id = entry_id
         self._name = name
-        self._mac = mac.upper()
+        self._mac = (mac or "").upper()
         self._device_id = device_id
+        self._media_player_entity_id = media_player_entity_id
         self._available = True
-        # Internal momentary state used only when no device_id is provided
-        self._is_on = False
-        self._attr_unique_id = f"mibox_{self._mac.replace(':', '')}"
+        self._is_on_internal = False
+        self._attr_unique_id = f"mibox_{(self._mac or '').replace(':', '')}"
         self._device_info = {
             "identifiers": {(DOMAIN, self._mac)},
             "name": self._name,
             "manufacturer": "Xiaomi (Mibox)",
-            "model": "Mibox (via bluetoothctl pairing)",
+            "model": "Mibox (bluetooth wake)",
         }
-        # Will hold unsubscribe callback from async_track_state_change
-        self._unsub_media: Callable | None = None
+        self._unsub_media: Optional[Callable] = None
 
     @property
     def device_info(self) -> dict:
@@ -69,7 +75,7 @@ class MiBoxSocketSwitch(SwitchEntity):
         return self._available
 
     def _get_device_entity_ids(self) -> List[str]:
-        """Return list of entity_ids associated with stored device_id."""
+        """Registry'den device_id'ye bağlı entity id'leri getir ve logla."""
         if not self._device_id:
             return []
         registry = er.async_get(self.hass)
@@ -77,52 +83,70 @@ class MiBoxSocketSwitch(SwitchEntity):
         for ent in registry.entities.values():
             if ent.device_id == self._device_id:
                 entity_ids.append(ent.entity_id)
+        _LOGGER.debug("MiBoxSocket: device_id=%s için bulunan entity_ids: %s", self._device_id, entity_ids)
         return entity_ids
 
     def _device_is_on(self) -> bool:
-        """Check HA states for any entity attached to the device_id that indicate 'on'."""
+        """
+        Device id veya media_player_entity_id üzerinden on/playing/active kontrolleri yap.
+        Hangi entity'nin hangı durumda olduğu loglanır.
+        """
+        # Öncelik: açıkça verilen media_player_entity_id
+        if self._media_player_entity_id:
+            st = self.hass.states.get(self._media_player_entity_id)
+            _LOGGER.debug("MiBoxSocket: kontrol edilen media_player_entity_id=%s state=%s", self._media_player_entity_id, st.state if st else "None")
+            if st and st.state in ("on", "playing", "active"):
+                return True
+            return False
+
+        # device_id bazlı kontrol
         if not self._device_id:
             return False
         entity_ids = self._get_device_entity_ids()
         for entity_id in entity_ids:
-            state = self.hass.states.get(entity_id)
-            if state is None:
+            st = self.hass.states.get(entity_id)
+            if not st:
+                _LOGGER.debug("MiBoxSocket: entity %s state None", entity_id)
                 continue
-            # Common 'on' states for media_player: 'on', 'playing', 'active'
-            if state.state in ("on", "playing", "active"):
+            _LOGGER.debug("MiBoxSocket: device entity check: %s -> %s", entity_id, st.state)
+            if st.state in ("on", "playing", "active"):
+                _LOGGER.debug("MiBoxSocket: device considered ON because %s is %s", entity_id, st.state)
                 return True
         return False
 
     @property
     def is_on(self) -> bool:
         """
-        If device_id present, use HA device state; otherwise use internal momentary state.
-        This makes the switch reflect the media_player(s) state when a device_id is stored.
+        Eğer device veya media_player tanımlıysa HA'daki gerçek durumu döndürür.
+        Eğer tanımlı değilse internal momentary state döner.
         """
-        if self._device_id:
-            return self._device_is_on()
-        return self._is_on
+        if self._device_id or self._media_player_entity_id:
+            try:
+                val = self._device_is_on()
+                _LOGGER.debug("MiBoxSocket: is_on computed from device/media_player => %s", val)
+                return val
+            except Exception as e:
+                _LOGGER.exception("MiBoxSocket: is_on hesaplanırken hata: %s", e)
+                return False
+        return self._is_on_internal
 
     async def async_added_to_hass(self) -> None:
-        """
-        Entity HA'ye eklendiğinde çalışır.
-        Eğer device_id belirtilmişse:
-          - Başlangıç durumunu HA'dan okuyup var ise UI'ı güncelle.
-          - device_id'ye bağlı entity'lerin state değişimini dinleyip UI'ı güncelle.
-        """
-        if self._device_id:
-            # Subscribe to state changes for entities that belong to the device_id
+        """Entity eklendiğinde gerekli abonelikleri kur."""
+        # Eğer media_player_entity_id varsa ona abone ol
+        if self._media_player_entity_id:
+            _LOGGER.debug("MiBoxSocket: media_player_entity_id ile abonelik kuruluyor: %s", self._media_player_entity_id)
+            self._unsub_media = async_track_state_change(self.hass, self._media_player_entity_id, self._async_media_state_changed)
+        elif self._device_id:
             entity_ids = self._get_device_entity_ids()
             if entity_ids:
-                # async_track_state_change returns an unsubscribe function
-                self._unsub_media = async_track_state_change(
-                    self.hass, entity_ids, self._async_media_state_changed
-                )
-            # Ensure HA updates the UI initially (component added after config flow)
-            self.async_write_ha_state()
+                _LOGGER.debug("MiBoxSocket: device_id aboneliği kuruluyor entity_ids=%s", entity_ids)
+                self._unsub_media = async_track_state_change(self.hass, entity_ids, self._async_media_state_changed)
+            else:
+                _LOGGER.debug("MiBoxSocket: device_id var ama entity bulunamadı (device_id=%s).", self._device_id)
+        # ilk UI güncellemesi
+        self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
-        # Entity kaldırılırken aboneliği iptal et
         if self._unsub_media:
             try:
                 self._unsub_media()
@@ -132,87 +156,62 @@ class MiBoxSocketSwitch(SwitchEntity):
 
     @callback
     def _async_media_state_changed(self, entity_id, old_state, new_state) -> None:
-        """
-        media_player veya device'e ait bir entity state değiştiğinde çağrılır.
-        Sadece UI'ı güncelliyoruz; is_on property zaten gerçek durumu hesaplar.
-        """
-        _LOGGER.debug("MiBoxSocket: bağlı entity %s durumu değişti: %s -> %s", entity_id, old_state, new_state)
-        # Force HA to re-evaluate state (is_on property will query current device state)
+        _LOGGER.debug("MiBoxSocket: bağlı entity %s durumu değişti: %s -> %s", entity_id, old_state.state if old_state else None, new_state.state if new_state else None)
+        # UI'ı güncelle
         self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """
-        Kullanıcı switch'i 'on' yapmak isteyince HA bunu çağırır.
-        Davranış:
-         - Eğer device_id tanımlıysa ve bağlı media_player zaten 'on' ise pairing/BT komutu gönderilmeyecek.
-         - Eğer device_id yok veya bağlı device kapalı ise pairing yapılacak.
-        """
-        _LOGGER.debug("MiBoxSocket: turn_on çağrıldı (mac=%s device_id=%s)", self._mac, self._device_id)
+        """Switch ON talebi geldiğinde önce device/media_player durumuna bak, açıksa pairing atlama."""
+        _LOGGER.debug("MiBoxSocket: turn_on çağrısı (mac=%s device_id=%s media_player_entity=%s)", self._mac, self._device_id, self._media_player_entity_id)
 
-        # Eğer device_id varsa, önce bağlı device'in mevcut durumunu kontrol et
-        if self._device_id:
-            try:
-                if self._device_is_on():
-                    _LOGGER.info(
-                        "MiBoxSocket: bağlı cihaz zaten açık. (device_id=%s) Bluetooth pairing gönderilmeyecek.",
-                        self._device_id,
-                    )
-                    # is_on property zaten True; force UI update ve return
-                    self.async_write_ha_state()
-                    return
-            except Exception as e:
-                _LOGGER.exception("MiBoxSocket: device state kontrol edilirken hata: %s", e)
-                # Eğer hata olursa pairing'i denemeye devam edebiliriz (varsayılan olarak)
-
-        # Buraya gelirse: ya device_id yok, ya da cihaz kapalı -> pairing yap
-        if not shutil.which("bluetoothctl"):
-            _LOGGER.error(
-                "bluetoothctl bulunamadi. Host'unuzda BlueZ/ bluetoothctl yüklü olmalı."
-            )
+        # Eğer bağlı cihaz zaten açık görünüyorsa pairing gönderme
+        if (self._device_id or self._media_player_entity_id) and self._device_is_on():
+            _LOGGER.info("MiBoxSocket: bağlı cihaz zaten açık. Bluetooth komutu gönderilmeyecek.")
+            self.async_write_ha_state()
             return
 
-        # Kullanıcı pairing başlattıysa UI'de anlık ON göstermek için internal state (sadece no-device_id durumda)
-        if not self._device_id:
-            self._is_on = True
+        if not shutil.which("bluetoothctl"):
+            _LOGGER.error("MiBoxSocket: bluetoothctl bulunamadi; pairing yapılamaz.")
+            return
+
+        # Eğer internal (device_id yok) anlık ON göstermek istiyorsak
+        if not (self._device_id or self._media_player_entity_id):
+            self._is_on_internal = True
             self.async_write_ha_state()
 
-        _LOGGER.info("MiBoxSocket: Pairing başlatılıyor (MAC=%s).", self._mac)
+        _LOGGER.info("MiBoxSocket: pairing başlatılıyor (MAC=%s)", self._mac)
         try:
             success = await self.hass.async_add_executor_job(self._pair_device_blocking, self._mac)
             if success:
-                _LOGGER.info("Pairing başarılı: %s", self._mac)
+                _LOGGER.info("MiBoxSocket: pairing başarılı %s", self._mac)
             else:
-                _LOGGER.warning("Pairing başarısız: %s", self._mac)
+                _LOGGER.warning("MiBoxSocket: pairing başarısız %s", self._mac)
         except Exception as exc:
-            _LOGGER.exception("Pairing sırasında beklenmeyen hata: %s", exc)
+            _LOGGER.exception("MiBoxSocket: pairing sırasında hata: %s", exc)
         finally:
-            # pairing tamamlandıktan sonra, eğer device_id varsa gerçek durumu HA üzerinden al (UI refresh)
-            if self._device_id:
-                # small delay optional: HA entegrasyonları bazen state güncellemesi gecikebilir
-                # ama burada artık is_on property device'dan okuyacak; sadece UI'ı yenile
+            # pairing sonrası UI güncellemesi
+            if self._device_id or self._media_player_entity_id:
                 self.async_write_ha_state()
             else:
-                # device_id yoksa internal state'i kapatıyoruz (bu component momentary wake amaçlı çalıştı)
-                self._is_on = False
+                self._is_on_internal = False
                 self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """No specific unpair functionality implemented (for now)."""
-        self._is_on = False
+        self._is_on_internal = False
         self.async_write_ha_state()
 
     def _pair_device_blocking(self, mac: str) -> bool:
-        """Blocking pairing logic (pexpect)."""
+        """Blocking pairing logic (pexpect kullanıyor)."""
         try:
             import pexpect  # type: ignore
         except Exception as e:
-            _LOGGER.exception("pexpect import edilemedi: %s", e)
+            _LOGGER.exception("MiBoxSocket: pexpect import edilemedi: %s", e)
             return False
 
         try:
             child = pexpect.spawn("bluetoothctl", encoding="utf-8", timeout=PAIRING_TIMEOUT)
         except Exception as e:
-            _LOGGER.exception("bluetoothctl başlatılamadı: %s", e)
+            _LOGGER.exception("MiBoxSocket: bluetoothctl başlatılamadı: %s", e)
             return False
 
         try:
@@ -231,11 +230,11 @@ class MiBoxSocketSwitch(SwitchEntity):
             try:
                 child.expect([mac, pexpect.TIMEOUT], timeout=SCAN_TIMEOUT)
                 found = mac in (child.before or "") or mac in (child.after or "")
-            except pexpect.TIMEOUT:
+            except Exception:
                 found = False
 
             if not found:
-                _LOGGER.warning("Cihaz taramada bulunamadi (MAC: %s).", mac)
+                _LOGGER.warning("MiBoxSocket: cihaz taramada bulunamadi (MAC=%s)", mac)
                 try:
                     child.sendline("scan off")
                 except Exception:
@@ -245,17 +244,7 @@ class MiBoxSocketSwitch(SwitchEntity):
 
             child.sendline(f"pair {mac}")
             try:
-                idx = child.expect(
-                    [
-                        r"Pairing successful",
-                        r"Paired: yes",
-                        r"Failed to pair",
-                        r"AuthenticationFailed",
-                        r"AlreadyExists",
-                        pexpect.TIMEOUT,
-                    ],
-                    timeout=PAIRING_TIMEOUT,
-                )
+                idx = child.expect([r"Pairing successful", r"Paired: yes", r"Failed to pair", r"AuthenticationFailed", r"AlreadyExists", pexpect.TIMEOUT], timeout=PAIRING_TIMEOUT)
                 if idx in (0, 1):
                     try:
                         child.sendline(f"trust {mac}")
@@ -268,7 +257,7 @@ class MiBoxSocketSwitch(SwitchEntity):
                     child.close()
                     return True
                 else:
-                    _LOGGER.debug("Pairing beklenen konumda tamamlanmadi, idx=%s", idx)
+                    _LOGGER.debug("MiBoxSocket: pairing beklenen konumda tamamlanmadi, idx=%s", idx)
                     try:
                         child.sendline("scan off")
                     except Exception:
@@ -276,7 +265,7 @@ class MiBoxSocketSwitch(SwitchEntity):
                     child.close()
                     return False
             except Exception as e:
-                _LOGGER.exception("Pairing esnasında bekleme hatasi: %s", e)
+                _LOGGER.exception("MiBoxSocket: pairing esnasında bekleme hatasi: %s", e)
                 try:
                     child.sendline("scan off")
                 except Exception:
@@ -284,7 +273,7 @@ class MiBoxSocketSwitch(SwitchEntity):
                 child.close()
                 return False
         except Exception as exc:
-            _LOGGER.exception("Pairing sürecinde beklenmeyen exception: %s", exc)
+            _LOGGER.exception("MiBoxSocket: pairing sürecinde beklenmeyen exception: %s", exc)
             try:
                 child.close()
             except Exception:
