@@ -1,12 +1,12 @@
 {
   "domain": "mibox_socket",
   "name": "Mibox Socket",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "documentation": "https://github.com/DenizOner/mibox_socket",
   "issue_tracker": "https://github.com/DenizOner/mibox_socket/issues",
   "dependencies": [],
   "requirements": ["pexpect"],
-  "codeowners": ["@frlequ, @ChatGPT, @DenizOner"],
+  "codeowners": ["@frlequ", "@ChatGPT", "@DenizOner"],
   "config_flow": true,
   "iot_class": "assumed_state"
 }
