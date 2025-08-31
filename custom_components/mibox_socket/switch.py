@@ -1,222 +1,268 @@
-"""Switch entity for Mibox Socket with device-linked state detection."""
+"""
+custom_components/mibox_socket/switch.py
 
-from __future__ import annotations
+Mibox wake-up switch for Home Assistant.
+
+Özellikler:
+- Eğer config'te bir `media_player` entity_id verilmişse:
+  - Switch'in gösterilen durumu (is_on) media_player'ın durumuna bağlı tutulur:
+      media_player state != 'off'  -> switch görünümü: ON
+      media_player state == 'off' -> switch görünümü: OFF
+  - Kullanıcı switch'i açmaya çalıştığında (async_turn_on):
+      - Eğer media_player zaten 'on' durumdaysa, bluetooth pairing komutu gönderilmez.
+      - Eğer media_player 'off' ise, bluetooth pairing (wake) işlemi çalıştırılır.
+- Pairing işlemi pexpect ile gerçekleştirilir; ağır bloklama işlemi olduğu için executor'da çalıştırılır.
+- Kullanımı kolaylaştırmak için config hem eski yapı (device.mac) hem de düz (mac / media_player) altından destekler.
+"""
 
 import logging
-import shutil
-from typing import Any, List
+import time
+import asyncio
 
-from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.const import CONF_MAC, CONF_NAME
+import voluptuous as vol
 
-from homeassistant.helpers import entity_registry as er
-
-from .const import DOMAIN
+from homeassistant.components.switch import PLATFORM_SCHEMA, SwitchEntity
+from homeassistant.const import CONF_NAME
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.event import async_track_state_change
+from homeassistant.core import callback
 
 _LOGGER = logging.getLogger(__name__)
 
-SCAN_TIMEOUT = 15
-PAIRING_TIMEOUT = 30
+# Konfigürasyon anahtarları
+CONF_MAC = "mac"
+CONF_DEVICE = "device"
+CONF_MEDIA_PLAYER = "media_player"
+DEFAULT_NAME = "mibox_socket_switch"
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
-    """Config entry için entity ekle. Pass device_id if present."""
-    data = entry.data
-    name = data.get(CONF_NAME)
-    mac = data.get(CONF_MAC)
-    device_id = data.get("device_id")  # may be None
+# Platform schema: hem 'device: { mac: "...", media_player: "media_player.xyz" }'
+# hem de top level olarak 'mac' ve 'media_player' kabul eder.
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+    {
+        vol.Optional(CONF_DEVICE): vol.Schema(
+            {
+                vol.Required(CONF_MAC): cv.string,
+                vol.Optional(CONF_MEDIA_PLAYER): cv.entity_id,
+                vol.Optional(CONF_NAME): cv.string,
+            }
+        ),
+        vol.Optional(CONF_MAC): cv.string,
+        vol.Optional(CONF_MEDIA_PLAYER): cv.entity_id,
+        vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
+    }
+)
 
-    async_add_entities([MiBoxSocketSwitch(hass, entry.entry_id, name, mac, device_id)], True)
+
+def setup_platform(hass, config, add_entities, discovery_info=None):
+    """
+    Platform kurulum fonksiyonu (senkron). HA platformu bunu çağırır.
+    Burada config'ten MAC ve media_player alınır ve entity oluşturulur.
+    """
+    # Desteklenen yapı: configuration.yaml içinde ya:
+    # switch:
+    #   - platform: mibox_socket
+    #     device:
+    #       mac: "AA:BB:CC:DD:EE:FF"
+    #       media_player: media_player.livingroom
+    # veya doğrudan:
+    #   - platform: mibox_socket
+    #     mac: "AA:BB:CC:DD:EE:FF"
+    #     media_player: media_player.livingroom
+
+    # Öncelikle device dict varsa ondan al
+    device_conf = config.get(CONF_DEVICE) or {}
+    mac = device_conf.get(CONF_MAC) or config.get(CONF_MAC)
+    media_player = device_conf.get(CONF_MEDIA_PLAYER) or config.get(CONF_MEDIA_PLAYER)
+    name = device_conf.get(CONF_NAME) or config.get(CONF_NAME, DEFAULT_NAME)
+
+    if not mac:
+        _LOGGER.error("Mibox Socket: 'mac' konfigürasyonu gerekli.")
+        return
+
+    # Normalize: büyük harflerle MAC (daha kolay görüntüleme/karşılaştırma)
+    mac = mac.upper()
+
+    add_entities([MiboxSocketSwitch(hass, name, mac, media_player)], True)
 
 
-class MiBoxSocketSwitch(SwitchEntity):
-    """Mibox Socket switch entity with optional device_id for state detection."""
+class MiboxSocketSwitch(SwitchEntity):
+    """
+    Switch entity. Media player ile senkron halde davranır.
+    """
 
-    def __init__(self, hass: HomeAssistant, entry_id: str, name: str, mac: str, device_id: str | None = None) -> None:
+    def __init__(self, hass, name, mac, media_player_entity_id):
         self.hass = hass
-        self._entry_id = entry_id
         self._name = name
-        self._mac = mac.upper()
-        self._device_id = device_id
+        self._mac = mac
+        self._media_player = media_player_entity_id  # örn. "media_player.tv"
+        self._state = False  # True => switch HA'de ON görünür
         self._available = True
-        self._is_on = False
-        self._attr_unique_id = f"mibox_{self._mac.replace(':', '')}"
-
-        self._device_info = {
-            "identifiers": {(DOMAIN, self._mac)},
-            "name": self._name,
-            "manufacturer": "Xiaomi (Mibox)",
-            "model": "Mibox (via bluetoothctl pairing)",
-        }
+        self._unsub_media = None  # abonelik fonksiyonu
+        self._log_prefix = f"[mibox_socket {self._mac}]"
 
     @property
-    def device_info(self) -> dict:
-        return self._device_info
-
-    @property
-    def name(self) -> str:
+    def name(self):
         return self._name
 
     @property
-    def available(self) -> bool:
-        return self._available
-
-    def _get_device_entity_ids(self) -> List[str]:
-        """Return list of entity_ids associated with stored device_id."""
-        if not self._device_id:
-            return []
-        registry = er.async_get(self.hass)
-        # Collect entity_ids that have this device_id
-        entity_ids: List[str] = []
-        for ent in registry.entities.values():
-            if ent.device_id == self._device_id:
-                entity_ids.append(ent.entity_id)
-        return entity_ids
-
-    def _device_is_on(self) -> bool:
-        """Check HA states for any entity attached to the device_id that indicate 'on'."""
-        if not self._device_id:
-            return False
-        entity_ids = self._get_device_entity_ids()
-        for entity_id in entity_ids:
-            state = self.hass.states.get(entity_id)
-            if state is None:
-                continue
-            # Common 'on' states for media_player: 'on', 'playing'
-            if state.state in ("on", "playing", "active"):
-                return True
-        return False
+    def is_on(self):
+        """Switch'in anlık durumu (HA'ye gösterilen)."""
+        return self._state
 
     @property
-    def is_on(self) -> bool:
-        """If device_id present, use HA device state; otherwise use internal momentary state."""
-        if self._device_id:
-            return self._device_is_on()
-        return self._is_on
+    def available(self):
+        return self._available
 
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Trigger pairing (turn on action)."""
-        if not shutil.which("bluetoothctl"):
-            _LOGGER.error("bluetoothctl bulunamadi. Host'unuzda BlueZ/ bluetoothctl yüklü olmalı.")
-            return
+    async def async_added_to_hass(self):
+        """
+        Entity HA'ye eklendiğinde çalışır.
+        Eğer media_player belirtilmişse:
+          - Başlangıç durumunu media_player'dan al.
+          - media_player için state change aboneliği aç.
+        """
 
-        # user sees ON while pairing runs
-        self._is_on = True
-        self.async_write_ha_state()
-
-        try:
-            success = await self.hass.async_add_executor_job(self._pair_device_blocking, self._mac)
-            if success:
-                _LOGGER.info("Pairing başarılı: %s", self._mac)
+        if self._media_player:
+            # İlk durum kontrolü
+            state_obj = self.hass.states.get(self._media_player)
+            if state_obj:
+                # Basit karar: media_player state 'off' ise switch kapalı; değilse açık.
+                self._state = state_obj.state != "off"
+                _LOGGER.debug("%s Başlangıç media_player durumu: %s => switch=%s", self._log_prefix, state_obj.state, self._state)
             else:
-                _LOGGER.warning("Pairing başarısız: %s", self._mac)
-        except Exception as exc:
-            _LOGGER.exception("Pairing sırasında beklenmeyen hata: %s", exc)
-        finally:
-            # pairing tamamlandıktan sonra, eğer device_id varsa gerçek durumu HA üzerinden al
-            if self._device_id:
-                # small delay not added; rely on HA state updates that may come from integration
-                pass
-            self._is_on = False
+                # media_player entity bulunamadıysa false bırak
+                self._state = False
+                _LOGGER.warning("%s Belirtilen media_player '%s' bulunamadı.", self._log_prefix, self._media_player)
+
+            # Durum değişikliklerini dinle
+            # async_track_state_change(hass, entity_id or list, callback)
+            self._unsub_media = async_track_state_change(
+                self.hass, self._media_player, self._async_media_state_changed
+            )
+
+            # state yazdır
             self.async_write_ha_state()
 
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """No specific unpair functionality implemented (for now)."""
-        self._is_on = False
+    async def async_will_remove_from_hass(self):
+        # Entity kaldırılırken aboneliği iptal et
+        if self._unsub_media:
+            self._unsub_media()
+            self._unsub_media = None
+
+    @callback
+    def _async_media_state_changed(self, entity_id, old_state, new_state):
+        """
+        media_player durumu değiştiğinde çağrılır.
+        new_state: State objesi (veya None)
+        Logic: new_state.state != 'off' => bizim switch ON; 'off' => OFF.
+        """
+        if new_state is None:
+            # entity silindiyse veya yoksa, switch'i kapatabiliriz
+            _LOGGER.debug("%s media_player state became None (muhtemelen entity silindi).", self._log_prefix)
+            self._state = False
+            self.async_write_ha_state()
+            return
+
+        new_is_on = new_state.state != "off"
+        if new_is_on != self._state:
+            _LOGGER.info("%s media_player '%s' durumu '%s' => switch=%s", self._log_prefix, entity_id, new_state.state, new_is_on)
+            self._state = new_is_on
+            self.async_write_ha_state()
+
+    async def async_turn_on(self, **kwargs):
+        """
+        Kullanıcı switch'i 'on' yapmak isteyince HA bunu çağırır.
+        Davranış:
+         - Eğer media_player konfigüre edilmişse ve media_player zaten açıksa => BT komutu gönderilmez.
+         - Eğer media_player 'off' ise => pairing (wake) işlemi tetiklenir.
+        """
+        _LOGGER.debug("%s Kullanıcı turn_on çağrısı (media_player=%s)", self._log_prefix, self._media_player)
+
+        if self._media_player:
+            media_state = self.hass.states.get(self._media_player)
+            if media_state and media_state.state != "off":
+                # media player zaten çalışıyor: BT işlemine gerek yok
+                _LOGGER.info("%s Media player '%s' açık (%s). Bluetooth komutu gönderilmeyecek.", self._log_prefix, self._media_player, media_state.state)
+                # Switch görünümünü media_player ile uyumlu tut
+                self._state = True
+                self.async_write_ha_state()
+                return
+
+        # Buraya gelirse: ya media_player yok ya da media_player kapalı => pairing yap
+        _LOGGER.info("%s Media player kapalı veya belirtilmemiş. Bluetooth wake/pairing başlatılıyor...", self._log_prefix)
+
+        # pairing işlemi CPU bloklayacağı için executorda çalıştırıyoruz
+        await self.hass.async_add_executor_job(self._do_pairing)
+
+        # pairing'den sonra HA'de switch'i ON göster
+        self._state = True
         self.async_write_ha_state()
 
-    def _pair_device_blocking(self, mac: str) -> bool:
-        """Blocking pairing logic (pexpect)."""
+    async def async_turn_off(self, **kwargs):
+        """
+        Bu component aslında sadece 'wake' amaçlı; kapatma doğrudan kullanılamayabilir.
+        Burada sadece state'i kapatıyoruz (UI için). Fiziksel kapatma ADB veya başka yol ile yapılmalı.
+        """
+        _LOGGER.debug("%s Kullanıcı turn_off çağrısı.", self._log_prefix)
+        self._state = False
+        self.async_write_ha_state()
+
+    def _do_pairing(self):
+        """
+        Synchronous pairing routine. Burada `bluetoothctl` komutlarını kullanıyoruz.
+        Orijinal projede pexpect kullanılmıştı; burada da pexpect ile benzer akışı kullanıyoruz.
+        - scan on
+        - pair <MAC>
+        - trust <MAC>
+        - scan off
+
+        WARNING: Mibox ekranında eşleşme isteği çıkabilir; kullanıcının 'cancel' veya 'accept' yapması gerekebilir.
+        """
         try:
-            import pexpect  # type: ignore
+            import pexpect
         except Exception as e:
-            _LOGGER.exception("pexpect import edilemedi: %s", e)
-            return False
+            _LOGGER.exception("%s pexpect modülü bulunamadı: %s. Pairing yapılamaz.", self._log_prefix, e)
+            return
 
         try:
-            child = pexpect.spawn("bluetoothctl", encoding="utf-8", timeout=PAIRING_TIMEOUT)
-        except Exception as e:
-            _LOGGER.exception("bluetoothctl başlatılamadı: %s", e)
-            return False
-
-        try:
-            try:
-                child.sendline("agent NoInputNoOutput")
-                child.expect(["Agent registered", pexpect.TIMEOUT], timeout=5)
-            except Exception:
-                pass
-
-            try:
-                child.sendline("default-agent")
-            except Exception:
-                pass
-
+            _LOGGER.debug("%s bluetoothctl başlatılıyor...", self._log_prefix)
+            child = pexpect.spawn("bluetoothctl", encoding="utf-8", timeout=30)
+            # İlk prompt beklemesi (her sistemde farklı olabilir)
+            time.sleep(0.5)
+            # Başlangıçta scan aç
             child.sendline("scan on")
+            # Kısa süre tarama yap
+            time.sleep(2)
 
-            found = False
-            try:
-                child.expect([mac, pexpect.TIMEOUT], timeout=SCAN_TIMEOUT)
-                found = mac in child.before or mac in child.after
-            except pexpect.TIMEOUT:
-                found = False
+            _LOGGER.debug("%s pair komutu gönderiliyor: %s", self._log_prefix, self._mac)
+            child.sendline(f"pair {self._mac}")
 
-            if not found:
-                _LOGGER.warning("Cihaz taramada bulunamadi (MAC: %s).", mac)
-                try:
-                    child.sendline("scan off")
-                except Exception:
-                    pass
-                child.close()
-                return False
-
-            child.sendline(f"pair {mac}")
-
+            # Bekleme: pairing sonucu mesajlarında farklı metinler olabilir (sistem, cihaz)
             try:
                 idx = child.expect(
                     [
-                        r"Pairing successful",
-                        r"Paired: yes",
-                        r"Failed to pair",
-                        r"AuthenticationFailed",
-                        r"AlreadyExists",
+                        "Pairing successful",
+                        "Pairing failed",
+                        "Failed to pair",
+                        "already paired",
+                        "Authentication Failed",
                         pexpect.TIMEOUT,
+                        pexpect.EOF,
                     ],
-                    timeout=PAIRING_TIMEOUT,
+                    timeout=20,
                 )
-                if idx in (0, 1):
-                    try:
-                        child.sendline(f"trust {mac}")
-                    except Exception:
-                        pass
-                    try:
-                        child.sendline("scan off")
-                    except Exception:
-                        pass
-                    child.close()
-                    return True
-                else:
-                    _LOGGER.debug("Pairing beklenen konumda tamamlanmadi, idx=%s", idx)
-                    try:
-                        child.sendline("scan off")
-                    except Exception:
-                        pass
-                    child.close()
-                    return False
             except Exception as e:
-                _LOGGER.exception("Pairing esnasında bekleme hatasi: %s", e)
-                try:
-                    child.sendline("scan off")
-                except Exception:
-                    pass
-                child.close()
-                return False
+                _LOGGER.debug("%s Pairing beklenirken timeout/exception: %s", self._log_prefix, e)
+                idx = None
 
-        except Exception as exc:
-            _LOGGER.exception("Pairing sürecinde beklenmeyen exception: %s", exc)
-            try:
-                child.close()
-            except Exception:
-                pass
-            return False
+            # Basit kontrol: eğer pairing başarılı veya zaten eşli ise trust komutu ver
+            # (eşlenmişse wake işlemi genelde başarılı olur)
+            # Not: Bazı cihazlarda pairing isteği ekranda görünür ve manuel onay gerekir.
+            _LOGGER.debug("%s pairing sonucu index=%s", self._log_prefix, idx)
+            child.sendline(f"trust {self._mac}")
+            time.sleep(0.5)
+            child.sendline("scan off")
+            time.sleep(0.2)
+            child.close(force=True)
+            _LOGGER.info("%s Pairing işlemi tamamlandı (komutlar gönderildi). Cihaz uyanmış olabilir.", self._log_prefix)
+        except Exception as e:
+            _LOGGER.exception("%s Pairing sırasında hata: %s", self._log_prefix, e)
