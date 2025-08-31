@@ -9,7 +9,7 @@
           "name": "Cihaz ismi",
           "mac": "Bluetooth MAC adresi (AA:BB:CC:11:22:33)",
           "bluetooth_mac": "Bluetooth MAC Adresi",
-          "device_id": "Home Assistant Cihazı"
+          "device_id": "Home Assistant Cihazı",
           "method": "Yapılandırma yöntemi",
           "device": "Home Assistant cihazı seçin"
         }
@@ -27,4 +27,3 @@
     }
   }
 }
-
