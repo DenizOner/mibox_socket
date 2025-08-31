@@ -1,136 +1,170 @@
-"""Config flow for Mibox Socket integration with optional device selection.
+"""custom_components/mibox_socket/config_flow.py
 
-Adımlar:
-1) Yöntem seç (Manual veya Select existing HA device)
-2a) Manual: name + mac gir
-2b) Select: HA'de görünen media_player'lar listelenir -> seç -> ardından MAC ve isim gir (isim otomatik olabilir)
+Daha sağlam config flow:
+- Form gösterme / işleme sırasında oluşan exception'ları yakalar ve loglar.
+- Eğer `selector.EntitySelector` UI tarafında hata çıkarırsa fallback: düz text input kullanır.
+- Options kaydedildiğinde entry reload denenir ve olası hatalar loglanır.
 """
 
 from __future__ import annotations
 
-import re
+from typing import Any
+import logging
+
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.core import HomeAssistant
 from homeassistant.const import CONF_NAME, CONF_MAC
-from homeassistant.helpers import entity_registry as er
+from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import selector
+from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
 
-# Basit MAC regex
-_MAC_REGEX = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
+_LOGGER = logging.getLogger(__name__)
 
-STEP_INIT_SCHEMA = vol.Schema(
-    {
-        vol.Required("method", default="manual"): vol.In({"manual": "Manual: enter Bluetooth MAC & name", "select": "Select existing HA device (media_player)"}),
-    }
-)
 
-STEP_MANUAL_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_NAME): str,
-        vol.Required(CONF_MAC): str,
-    }
-)
-
-# select step schema is dynamic (vol.In with choices built at runtime)
-
+@config_entries.HANDLERS.register(DOMAIN)
 class MiBoxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow for Mibox Socket."""
+    """Config flow for MiBox Socket integration."""
 
-    VERSION = 2
+    VERSION = 1
+    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_PUSH
 
-    async def async_step_user(self, user_input=None):
-        """Initial step: choose method."""
-        errors = {}
-        if user_input is not None:
-            method = user_input.get("method")
-            if method == "manual":
-                return await self.async_step_manual()
-            if method == "select":
-                return await self.async_step_select()
-        return self.async_show_form(step_id="user", data_schema=STEP_INIT_SCHEMA, errors=errors)
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """
+        İlk adım: kullanıcıdan MAC (zorunlu) ve opsiyonel name / media_player seçimi al.
+        Bu fonksiyon hata-ziycindir: form oluşturma/gösterme adımlarında exception olursa yakalanır.
+        """
+        errors: dict[str, str] = {}
 
-    async def async_step_manual(self, user_input=None):
-        """Manual entry: ask for name and MAC."""
-        errors = {}
-        if user_input is not None:
-            mac = user_input[CONF_MAC].strip().upper()
-            if not _MAC_REGEX.match(mac):
-                errors["base"] = "invalid_mac"
-            else:
-                await self.async_set_unique_id(mac)
-                self._abort_if_unique_id_configured(updates={CONF_NAME: user_input[CONF_NAME], CONF_MAC: mac})
-                return self.async_create_entry(title=user_input[CONF_NAME], data={CONF_NAME: user_input[CONF_NAME], CONF_MAC: mac})
-        return self.async_show_form(step_id="manual", data_schema=STEP_MANUAL_SCHEMA, errors=errors)
+        try:
+            if user_input is not None:
+                mac = user_input.get(CONF_MAC)
+                name = user_input.get(CONF_NAME)
+                media_player_entity_id = user_input.get("media_player_entity_id")
 
-    async def async_step_select(self, user_input=None):
-        """Show a dropdown of candidate HA media_player devices; then request MAC (and optional name)."""
-        # Build choices: device_id -> friendly name (unique)
-        registry = er.async_get(self.hass)
-        entities = registry.entities.values()
+                if not mac:
+                    errors["base"] = "mac_required"
+                else:
+                    data = {
+                        CONF_MAC: mac,
+                        CONF_NAME: name or "",
+                    }
+                    if media_player_entity_id:
+                        data["media_player_entity_id"] = media_player_entity_id
 
-        # Find media_player entities that are linked to a device (device_id not None)
-        choices = {}
-        for ent in entities:
-            if ent.domain == "media_player" and ent.device_id:
-                # Friendly label: use original name or entity_id as fallback
-                label = ent.original_name or ent.name or ent.entity_id
-                # don't overwrite label if device already added, but prefer first
-                if ent.device_id not in choices:
-                    choices[ent.device_id] = label
+                    title = name or f"MiBox {mac[-5:].replace(':','')}"
+                    return self.async_create_entry(title=title, data=data)
 
-        if not choices:
-            # Eğer HA'de uygun device yoksa kullanıcıyı geri gönder
-            return self.async_abort(reason="no_ha_device_found")
+            # Formu oluştur — önce modern selector kullanmayı dene
+            try:
+                media_selector = selector.EntitySelector({"domain": "media_player", "multiple": False})
+                schema = vol.Schema(
+                    {
+                        vol.Required(CONF_MAC): str,
+                        vol.Optional(CONF_NAME, default=""): str,
+                        vol.Optional("media_player_entity_id", default=""): media_selector,
+                    }
+                )
+            except Exception as sel_exc:
+                # Selector oluşturma hata verirse fallback: düz string input
+                _LOGGER.warning("MiBoxSocket: EntitySelector oluşturulurken hata: %s — fallback string input kullanılıyor", sel_exc)
+                schema = vol.Schema(
+                    {
+                        vol.Required(CONF_MAC): str,
+                        vol.Optional(CONF_NAME, default=""): str,
+                        vol.Optional("media_player_entity_id", default=""): str,
+                    }
+                )
 
-        schema = vol.Schema({vol.Required("device"): vol.In(choices)})
+            return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+        except Exception as exc:
+            # Bu genel catch UI'de 500 döndürmeyi engeller; traceback loglanır.
+            _LOGGER.exception("MiBoxSocket: async_step_user sırasında beklenmeyen hata: %s", exc)
+            # Kullanıcıya gösterilecek bir hata ile formu yeniden sun
+            try:
+                fallback_schema = vol.Schema(
+                    {
+                        vol.Required(CONF_MAC): str,
+                        vol.Optional(CONF_NAME, default=""): str,
+                        vol.Optional("media_player_entity_id", default=""): str,
+                    }
+                )
+                return self.async_show_form(step_id="user", data_schema=fallback_schema, errors={"base": "unknown"})
+            except Exception as exc2:
+                _LOGGER.exception("MiBoxSocket: async_step_user fallback form oluşturulurken de hata: %s", exc2)
+                return self.async_abort(reason="internal_error")
 
-        if user_input is not None:
-            device_id = user_input["device"]
-            # Prefill name from chosen label
-            name = choices.get(device_id, "Mibox")
-            # İleri adım: MAC sor
-            return await self.async_step_confirm_device({"device_id": device_id, "name": name})
 
-        return self.async_show_form(step_id="select", data_schema=schema)
+    async def async_get_options_flow(self, entry) -> "OptionsFlowHandler":
+        return OptionsFlowHandler(self.hass, entry)
 
-    async def async_step_confirm_device(self, user_input=None):
-        """After device selected, ask for MAC and optional name (prefilled)."""
-        # user_input may contain device_id and name passed from previous step
-        device_id = user_input.get("device_id")
-        prefill_name = user_input.get("name", "")
 
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_NAME, default=prefill_name): str,
-                vol.Required(CONF_MAC): str,
-            }
-        )
+class OptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle options for MiBox integration (display name, media_player selection)."""
 
-        errors = {}
-        if user_input is not None and "CONF_MAC" not in user_input:
-            # This guard is just to avoid mypy confusion
-            pass
+    def __init__(self, hass: HomeAssistant, entry: config_entries.ConfigEntry) -> None:
+        self.hass = hass
+        self.config_entry = entry
 
-        # actual submitted data arrives as user_input when this step is posted
-        if user_input is not None and "CONF_MAC" not in user_input:
-            # shouldn't happen
-            pass
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """
+        Options: display_name ve media_player_entity_id. Hata olursa yakala ve logla.
+        """
+        errors: dict[str, str] = {}
 
-        # But when the form is submitted properly, user_input will include CONF_MAC
-        # We need to fetch the real posted data from the function parameter
-        if user_input is not None and CONF_MAC in user_input:
-            mac = user_input[CONF_MAC].strip().upper()
-            if not _MAC_REGEX.match(mac):
-                errors["base"] = "invalid_mac"
-            else:
-                # create entry with device_id included
-                title = user_input[CONF_NAME]
-                data = {CONF_NAME: user_input[CONF_NAME], CONF_MAC: mac, "device_id": device_id}
-                await self.async_set_unique_id(mac)
-                self._abort_if_unique_id_configured(updates=data)
-                return self.async_create_entry(title=title, data=data)
+        data = dict(self.config_entry.data or {})
+        current_options = dict(self.config_entry.options or {})
 
-        return self.async_show_form(step_id="confirm_device", data_schema=schema, errors=errors)
+        default_display = current_options.get("display_name", "") or data.get(CONF_NAME, "")
+        default_media = current_options.get("media_player_entity_id") or data.get("media_player_entity_id", "")
 
+        try:
+            if user_input is not None:
+                new_options = {
+                    "display_name": (user_input.get("display_name") or "").strip(),
+                    "media_player_entity_id": user_input.get("media_player_entity_id") or "",
+                }
+                _LOGGER.debug("MiBoxSocket: Options kaydediliyor: %s", new_options)
+                self.hass.config_entries.async_update_entry(self.config_entry, options=new_options)
+                try:
+                    await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+                    _LOGGER.debug("MiBoxSocket: config entry reload edildi (entry_id=%s)", self.config_entry.entry_id)
+                except Exception as reload_exc:
+                    _LOGGER.exception("MiBoxSocket: config entry reload sırasında hata: %s", reload_exc)
+                return self.async_create_entry(title="", data=new_options)
+
+            # Formu oluştur, önce selector dene, fallback varsa düz input kullan
+            try:
+                media_selector = selector.EntitySelector({"domain": "media_player", "multiple": False})
+                schema = vol.Schema(
+                    {
+                        vol.Optional("display_name", default=default_display): str,
+                        vol.Optional("media_player_entity_id", default=default_media): media_selector,
+                    }
+                )
+            except Exception as sel_exc:
+                _LOGGER.warning("MiBoxSocket: OptionsFlow EntitySelector oluşturulurken hata: %s — fallback string input kullanılıyor", sel_exc)
+                schema = vol.Schema(
+                    {
+                        vol.Optional("display_name", default=default_display): str,
+                        vol.Optional("media_player_entity_id", default=default_media): str,
+                    }
+                )
+
+            return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
+        except Exception as exc:
+            _LOGGER.exception("MiBoxSocket: OptionsFlow async_step_init sırasında beklenmeyen hata: %s", exc)
+            try:
+                fallback_schema = vol.Schema(
+                    {
+                        vol.Optional("display_name", default=default_display): str,
+                        vol.Optional("media_player_entity_id", default=default_media): str,
+                    }
+                )
+                return self.async_show_form(step_id="init", data_schema=fallback_schema, errors={"base": "unknown"})
+            except Exception as exc2:
+                _LOGGER.exception("MiBoxSocket: OptionsFlow fallback form üretiminde hata: %s", exc2)
+                return self.async_abort(reason="internal_error")
