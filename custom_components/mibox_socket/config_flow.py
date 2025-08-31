@@ -22,7 +22,7 @@ _MAC_REGEX = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 
 STEP_INIT_SCHEMA = vol.Schema(
     {
-        vol.Required("method", default="manual"): vol.In({"manual": "Manual: enter MAC & name", "select": "Select existing HA device (media_player)"}),
+        vol.Required("method", default="manual"): vol.In({"manual": "Manual: enter Bluetooth MAC & name", "select": "Select existing HA device (media_player)"}),
     }
 )
 
@@ -133,3 +133,4 @@ class MiBoxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(title=title, data=data)
 
         return self.async_show_form(step_id="confirm_device", data_schema=schema, errors=errors)
+
