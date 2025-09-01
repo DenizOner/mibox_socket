@@ -1,8 +1,3 @@
-"""custom_components/mibox_socket/switch.py
-
-Güncelleme: media_player kapanış komutu desteği eklendi.
-Ayrıca entry.name içeriği media_player entity id ise bunu media_player_entity_id olarak kullanma düzeltmesi içerir.
-"""
 
 from __future__ import annotations
 
@@ -17,7 +12,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.const import CONF_MAC, CONF_NAME
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.event import async_track_state_change
+from homeassistant.helpers.event import async_track_state_change, async_call_later
 
 from .const import DOMAIN
 
@@ -25,43 +20,24 @@ _LOGGER = logging.getLogger(__name__)
 
 SCAN_TIMEOUT = 15
 PAIRING_TIMEOUT = 30
+DEFAULT_OFF_DEBOUNCE = 8  # saniye
 
 ENTITY_ID_RE = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
-    """Config entry için entity ekle ve entry.data içeriğini akıllıca işle."""
+    """Platform loader'ın beklediği modül-seviyesinde async_setup_entry."""
     data = entry.data or {}
-    raw_name = data.get(CONF_NAME) or ""
+    options = entry.options or {}
+    display_name = options.get("display_name") or data.get(CONF_NAME) or f"MiBox_{data.get(CONF_MAC,'')}"
     mac = data.get(CONF_MAC)
-    # Bazı eski/kullanıcı varyasyonları: 'media_player' veya 'media_player_entity_id'
-    media_player_entity_id = data.get("media_player") or data.get("media_player_entity_id")
-
-    # Eğer entry.options içinde display_name varsa onu tercih et
-    display_name = entry.options.get("display_name") if getattr(entry, "options", None) else None
-    if not display_name:
-        display_name = raw_name or f"mibox_{(mac or '')}"
-
-    # Eğer media_player bilgisi yoksa ve name bir entity_id pattern'ine uyuyorsa,
-    # name muhtemelen media_player olarak kaydedilmiş — bunu kullan.
-    if not media_player_entity_id and isinstance(raw_name, str) and raw_name.startswith("media_player.") and ENTITY_ID_RE.match(raw_name):
-        media_player_entity_id = raw_name
-        # display_name'i daha kullanıcı-dostu yap: "MiBox {MACson5}" veya entity id'den okunur bölüm
-        if mac:
-            display_name = f"MiBox {mac[-5:].replace(':', '')}"
-        else:
-            display_name = "MiBox " + raw_name.split(".", 1)[1]
-
-    _LOGGER.debug(
-        "MiBoxSocket async_setup_entry: entry_id=%s raw_name=%s -> display_name=%s media_player=%s mac=%s options=%s",
-        entry.entry_id, raw_name, display_name, media_player_entity_id, mac, getattr(entry, "options", None),
-    )
-
-    async_add_entities([MiBoxSocketSwitch(hass, entry.entry_id, display_name, mac, device_id=data.get("device_id"), media_player_entity_id=media_player_entity_id)], True)
+    device_id = data.get("device_id")
+    media_player_entity_id = data.get("media_player_entity_id") or data.get("media_player") or options.get("media_player_entity_id")
+    async_add_entities([MiBoxSocketSwitch(hass, entry.entry_id, display_name, mac, device_id=device_id, media_player_entity_id=media_player_entity_id)], True)
 
 
 class MiBoxSocketSwitch(SwitchEntity):
-    """Mibox Socket switch entity with robust detection (device_id or media_player entity)."""
+    """Mibox Socket switch entity with debounce for transient media_player state changes."""
 
     def __init__(self, hass: HomeAssistant, entry_id: str, name: str, mac: Optional[str], device_id: Optional[str] = None, media_player_entity_id: Optional[str] = None) -> None:
         self.hass = hass
@@ -80,6 +56,9 @@ class MiBoxSocketSwitch(SwitchEntity):
             "model": "Mibox (bluetooth wake)",
         }
         self._unsub_media: Optional[Callable] = None
+        self._off_check_handle: Optional[Callable] = None  # async_call_later callback
+        self._off_debounce_seconds: int = DEFAULT_OFF_DEBOUNCE
+        self._forced_user_action = False  # kullanıcının async_turn_off isteğini ayırt etmek için
 
     @property
     def device_info(self) -> dict:
@@ -94,7 +73,7 @@ class MiBoxSocketSwitch(SwitchEntity):
         return self._available
 
     def _get_device_entity_ids(self) -> List[str]:
-        """Registry'den device_id'ye bağlı entity id'leri getir ve logla."""
+        """Registry'den device_id'ye bağlı entity id'leri getir."""
         if not self._device_id:
             return []
         registry = er.async_get(self.hass)
@@ -105,61 +84,77 @@ class MiBoxSocketSwitch(SwitchEntity):
         _LOGGER.debug("MiBoxSocket: device_id=%s için bulunan entity_ids: %s", self._device_id, entity_ids)
         return entity_ids
 
+    def _get_tracked_entity_ids(self) -> List[str]:
+        """
+        Hangi entity'leri izlediğimizi döndür.
+        Öncelik: açıkça verilen media_player_entity_id. Yoksa device_id'ye bağlı tüm entity'ler.
+        """
+        if self._media_player_entity_id:
+            return [self._media_player_entity_id]
+        if self._device_id:
+            return self._get_device_entity_ids()
+        return []
+
     def _device_is_on(self) -> bool:
         """
-        Device id veya media_player_entity_id üzerinden on/playing/active kontrolleri yap.
-        Hangi entity'nin hangi durumda olduğu loglanır.
+        İzlenen entity'lerin herhangi biri 'on'/'playing'/'active' ise device on sayılır.
         """
-        # Öncelik: açıkça verilen media_player_entity_id
-        if self._media_player_entity_id:
-            st = self.hass.states.get(self._media_player_entity_id)
-            _LOGGER.debug("MiBoxSocket: kontrol edilen media_player_entity_id=%s state=%s", self._media_player_entity_id, st.state if st else "None")
-            if st and st.state in ("on", "playing", "active"):
-                return True
+        entity_ids = self._get_tracked_entity_ids()
+        if not entity_ids:
             return False
-
-        # device_id bazlı kontrol
-        if not self._device_id:
-            return False
-        entity_ids = self._get_device_entity_ids()
         for entity_id in entity_ids:
             st = self.hass.states.get(entity_id)
-            if not st:
-                _LOGGER.debug("MiBoxSocket: entity %s state None", entity_id)
+            if st is None:
                 continue
-            _LOGGER.debug("MiBoxSocket: device entity check: %s -> %s", entity_id, st.state)
             if st.state in ("on", "playing", "active"):
-                _LOGGER.debug("MiBoxSocket: device considered ON because %s is %s", entity_id, st.state)
+                _LOGGER.debug("MiBoxSocket: %s durumu %s -> considered ON", entity_id, st.state)
                 return True
         return False
 
     @property
     def is_on(self) -> bool:
-        """Eğer media_player veya device_id tanımlıysa HA'daki gerçek durumu döndürür."""
+        """
+        Debounce mantığı: is_on doğrudan gerçek duruma bakar,
+        ama otomatik UI off uygulaması sadece doğrulanmış off sonrası yapılır.
+        (Burada dönen değer, sistemin gördüğü nihai durumdur.)
+        """
+        # Eğer takip edilen entity'ler varsa direkt device_is_on hesaplaması gösterilsin.
+        # Ancak gerçek UI off uygulaması debounce sürecine bağlı olarak gecikme ile gerçekleşir.
         if self._device_id or self._media_player_entity_id:
-            try:
-                val = self._device_is_on()
-                _LOGGER.debug("MiBoxSocket: is_on computed from device/media_player => %s", val)
-                return val
-            except Exception as e:
-                _LOGGER.exception("MiBoxSocket: is_on hesaplanırken hata: %s", e)
-                return False
+            # Eğer şu anda off-check scheduled ise, halen biz ON göstermeye devam edebiliriz.
+            if self._off_check_handle:
+                # off check beklemede: geçici off görüldü, ama henüz doğrulanmadı.
+                _LOGGER.debug("MiBoxSocket: off_check beklemede, is_on=%s (öncelik ON)", True)
+                return True
+            val = self._device_is_on()
+            _LOGGER.debug("MiBoxSocket: is_on computed from device/media_player => %s", val)
+            return val
         return self._is_on_internal
 
     async def async_added_to_hass(self) -> None:
-        """Entity eklendiğinde gerekli abonelikleri kur."""
-        # Eğer media_player_entity_id varsa ona abone ol
-        if self._media_player_entity_id:
-            _LOGGER.debug("MiBoxSocket: media_player_entity_id ile abonelik kuruluyor: %s", self._media_player_entity_id)
-            self._unsub_media = async_track_state_change(self.hass, self._media_player_entity_id, self._async_media_state_changed)
-        elif self._device_id:
-            entity_ids = self._get_device_entity_ids()
-            if entity_ids:
-                _LOGGER.debug("MiBoxSocket: device_id aboneliği kuruluyor entity_ids=%s", entity_ids)
-                self._unsub_media = async_track_state_change(self.hass, entity_ids, self._async_media_state_changed)
-            else:
-                _LOGGER.debug("MiBoxSocket: device_id var ama entity bulunamadı (device_id=%s).", self._device_id)
-        # ilk UI güncellemesi
+        """Entity eklendiğinde abonelik ve off_debounce ayarını al."""
+        # off_debounce seconds al (entry options varsa)
+        try:
+            entry = self.hass.config_entries.async_get_entry(self._entry_id)
+            if entry:
+                opt = entry.options.get("off_debounce")
+                if opt is not None:
+                    # try convert to int
+                    try:
+                        self._off_debounce_seconds = int(opt)
+                    except Exception:
+                        self._off_debounce_seconds = DEFAULT_OFF_DEBOUNCE
+            _LOGGER.debug("MiBoxSocket: off_debounce_seconds=%s", self._off_debounce_seconds)
+        except Exception:
+            _LOGGER.debug("MiBoxSocket: entry lookup sırasında hata, off_debounce default kullanılıyor")
+
+        tracked = self._get_tracked_entity_ids()
+        if tracked:
+            self._unsub_media = async_track_state_change(self.hass, tracked, self._async_media_state_changed)
+            _LOGGER.debug("MiBoxSocket: tracked entities subscription kuruldu: %s", tracked)
+        else:
+            _LOGGER.debug("MiBoxSocket: hiç entity takip edilmiyor (device_id/media_player boş).")
+
         self.async_write_ha_state()
 
     async def async_will_remove_from_hass(self) -> None:
@@ -169,18 +164,71 @@ class MiBoxSocketSwitch(SwitchEntity):
             except Exception:
                 pass
             self._unsub_media = None
+        self._cancel_off_check()
+
+    def _cancel_off_check(self) -> None:
+        """Eğer off doğrulama için zamanlayıcı varsa iptal et."""
+        if self._off_check_handle:
+            try:
+                self._off_check_handle()  # cancel callback
+            except Exception:
+                pass
+            self._off_check_handle = None
+            _LOGGER.debug("MiBoxSocket: off_check iptal edildi.")
+
+    def _schedule_off_check(self) -> None:
+        """off_debounce saniye sonra _confirm_off çalıştır."""
+        self._cancel_off_check()
+        _LOGGER.debug("MiBoxSocket: off_check %s saniye sonra planlanıyor.", self._off_debounce_seconds)
+        self._off_check_handle = async_call_later(self.hass, self._off_debounce_seconds, self._confirm_off)
+
+    async def _confirm_off(self, _now) -> None:
+        """Debounce süresi sonra gerçekten off mı diye kontrol et; eğer off ise UI'ı kapat."""
+        self._off_check_handle = None
+        try:
+            still_on = self._device_is_on()
+            _LOGGER.debug("MiBoxSocket: _confirm_off kontrolü -> still_on=%s", still_on)
+            if not still_on:
+                # Gerçekten off ise UI'ı OFF yap (ancak otomatik olarak media_player.turn_off çağırmayız)
+                _LOGGER.info("MiBoxSocket: doğrulanmış OFF, UI kapatılıyor.")
+                self.async_write_ha_state()  # is_on property artık False dönecek
+            else:
+                _LOGGER.debug("MiBoxSocket: cihaz debounce süresi sonunda yine ON bulundu; UI ON kaldı.")
+                # nothing to do (is_on remains True)
+        except Exception as exc:
+            _LOGGER.exception("MiBoxSocket: _confirm_off sırasında hata: %s", exc)
 
     @callback
     def _async_media_state_changed(self, entity_id, old_state, new_state) -> None:
-        _LOGGER.debug("MiBoxSocket: bağlı entity %s durumu değişti: %s -> %s", entity_id, old_state.state if old_state else None, new_state.state if new_state else None)
-        # UI'ı güncelle
-        self.async_write_ha_state()
+        """
+        Her media_player state change geldiğinde:
+        - Eğer yeni durum 'on/playing/active' ise off-check iptal ve hemen ON göster.
+        - Eğer yeni durum 'off' ise off_check zamanlayıp doğrulama yap.
+        """
+        _LOGGER.debug("MiBoxSocket: media state changed: %s %s -> %s", entity_id, old_state.state if old_state else None, new_state.state if new_state else None)
+
+        # Eğer herhangi bir izlenen entity 'on' ise hemen ON göster ve bekleyen off_check iptal et
+        if self._device_is_on():
+            _LOGGER.debug("MiBoxSocket: en az bir izlenen entity ON durumda -> off_check iptal ediliyor ve UI ON tutuluyor.")
+            self._cancel_off_check()
+            self.async_write_ha_state()
+            return
+
+        # Eğer buraya geldiyse izlenen entity'lerin hepsi OFF görünüyor -> debounce ile doğrula
+        _LOGGER.debug("MiBoxSocket: tüm izlenen entity'ler OFF görünüyor -> off_check planlanıyor.")
+        self._schedule_off_check()
+        # UI'ı hemen yazmıyoruz; confirm_off sonucuna göre update edilecek.
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Switch ON talebi geldiğinde önce device/media_player durumuna bak, açıksa pairing/komut atlama."""
+        """
+        Kullanıcı switch'i açmak isteyince (manual ON).
+        Burada pairing/power on işlemini yapıyoruz (eski davranış).
+        """
         _LOGGER.debug("MiBoxSocket: turn_on çağrısı (mac=%s device_id=%s media_player_entity=%s)", self._mac, self._device_id, self._media_player_entity_id)
 
-        # Eğer bağlı cihaz zaten açık görünüyorsa pairing gönderme
+        # Kullanıcı eylemi olduğundan, önce off_check varsa iptal et
+        self._cancel_off_check()
+
         if (self._device_id or self._media_player_entity_id) and self._device_is_on():
             _LOGGER.info("MiBoxSocket: bağlı cihaz zaten açık. Bluetooth komutu gönderilmeyecek.")
             self.async_write_ha_state()
@@ -190,7 +238,7 @@ class MiBoxSocketSwitch(SwitchEntity):
             _LOGGER.error("MiBoxSocket: bluetoothctl bulunamadi; pairing yapılamaz.")
             return
 
-        # Eğer internal (device_id yok) anlık ON göstermek istiyorsak
+        # internal state göster (momentary)
         if not (self._device_id or self._media_player_entity_id):
             self._is_on_internal = True
             self.async_write_ha_state()
@@ -207,6 +255,7 @@ class MiBoxSocketSwitch(SwitchEntity):
         finally:
             # pairing sonrası UI güncellemesi
             if self._device_id or self._media_player_entity_id:
+                # Off check iptal edilmiş olabilir; durumu yeniden göster
                 self.async_write_ha_state()
             else:
                 self._is_on_internal = False
@@ -214,19 +263,18 @@ class MiBoxSocketSwitch(SwitchEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """
-        Switch kapatıldığında:
-         - Eğer açıkça media_player_entity_id belirtilmişse ona media_player.turn_off çağır.
-         - Eğer device_id varsa device'a bağlı tüm entity'leri al, domain=media_player olanlara turn_off çağır.
-         - Aksi halde sadece internal state'i kapat.
+        Kullanıcı tarafından kapatma isteği:
+         - Hedef media_player entity'lerine media_player.turn_off çağrılır hemen (blocking).
         """
-        _LOGGER.debug("MiBoxSocket: turn_off çağrısı (mac=%s device_id=%s media_player_entity=%s)", self._mac, self._device_id, self._media_player_entity_id)
+        _LOGGER.debug("MiBoxSocket: turn_off çağrısı (user-request) mac=%s device_id=%s media_player_entity=%s", self._mac, self._device_id, self._media_player_entity_id)
 
-        # Eğer media_player entity belirli ise doğrudan ona turn_off gönder
+        # iptal varsa iptal et
+        self._cancel_off_check()
+
         targets: List[str] = []
         if self._media_player_entity_id:
             targets.append(self._media_player_entity_id)
         elif self._device_id:
-            # device_id'ye bağlı tüm entity'leri al, domain'i media_player olanları hedefle
             entity_ids = self._get_device_entity_ids()
             for eid in entity_ids:
                 domain = eid.split(".", 1)[0]
@@ -234,22 +282,17 @@ class MiBoxSocketSwitch(SwitchEntity):
                     targets.append(eid)
 
         if targets:
-            _LOGGER.debug("MiBoxSocket: turn_off için hedef media_player entity'leri: %s", targets)
-            # Her hedefe sırayla turn_off çağır; blocking=True ile bekle
             for target in targets:
                 try:
-                    # Eğer servis yoksa exception veya hata alabilir; bunu handle edelim
-                    await self.hass.services.async_call(
-                        "media_player", "turn_off", {"entity_id": target}, blocking=True
-                    )
+                    await self.hass.services.async_call("media_player", "turn_off", {"entity_id": target}, blocking=True)
                     _LOGGER.info("MiBoxSocket: media_player.turn_off çağrıldı: %s", target)
                 except Exception as exc:
                     _LOGGER.exception("MiBoxSocket: media_player.turn_off sırasında hata (%s): %s", target, exc)
-            # UI güncellemesi: gerçek state servis çağrısı sonrası HA tarafından gelebilir, yine de yazdır
+            # state HA tarafından güncellenecek; yine de UI yazdır
             self.async_write_ha_state()
             return
 
-        # Eğer hiç target yoksa internal state'i kapat
+        # fallback internal state toggle
         self._is_on_internal = False
         self.async_write_ha_state()
 
@@ -332,5 +375,3 @@ class MiBoxSocketSwitch(SwitchEntity):
             except Exception:
                 pass
             return False
-
-
