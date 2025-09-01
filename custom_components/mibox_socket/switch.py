@@ -1,31 +1,3 @@
-# --- Aşağıdaki fonksiyonu switch.py içine, dosyanın üstüne veya uygun bir yere yapıştırın. ---
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.const import CONF_MAC, CONF_NAME
-
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback):
-    """
-    Platform loader'ın beklediği modül-seviyesinde async_setup_entry.
-    ConfigEntry içindeki data/options alanlarını okuyup MiBoxSocketSwitch örneği oluşturur.
-    """
-    data = entry.data or {}
-    options = entry.options or {}
-
-    # Öncelikli olarak options'taki display_name'i al
-    display_name = options.get("display_name") or data.get(CONF_NAME) or f"MiBox_{data.get(CONF_MAC,'')}"
-    mac = data.get(CONF_MAC)
-    device_id = data.get("device_id")
-    # media_player anahtarını birkaç farklı isimden kontrol et
-    media_player_entity_id = data.get("media_player_entity_id") or data.get("media_player") or options.get("media_player_entity_id")
-
-    # İlgili sınıf aynı dosyada tanımlı: MiBoxSocketSwitch
-    # (Eğer sınıf farklı dosyada ise uygun import ile değiştirin)
-    async_add_entities([MiBoxSocketSwitch(hass, entry.entry_id, display_name, mac, device_id=device_id, media_player_entity_id=media_player_entity_id)], True)
-# --- Fonksiyon sonu ---
-
-
-
 """custom_components/mibox_socket/switch.py
 
 Güncelleme: media_player kapanış komutu desteği eklendi.
@@ -360,4 +332,5 @@ class MiBoxSocketSwitch(SwitchEntity):
             except Exception:
                 pass
             return False
+
 
