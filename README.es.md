@@ -41,11 +41,23 @@ Se proporcionan dos métodos de instalación. Los archivos deben situarse en `cu
 
 ### 2) Instalación vía HACS (recomendado)
 1. Abra Home Assistant → **HACS** → **Integrations**.
+	![HACS pantalla principal](docs/images/hacs_main.png)  
+	*Vista principal de Integraciones en HACS.*
+
 2. Haga clic en el menú de tres puntos → **Custom repositories**.
+	![HACS repositorios personalizados](docs/images/hacs_custom_repos.png)  
+	*Acceda al diálogo “Custom repositories” desde el menú de tres puntos.*
+
 3. Añada el repositorio:
    - URL del repositorio: `https://github.com/DenizOner/MiPower`
    - Categoría / Tipo: **Integration**
+   	![HACS añadir repo](docs/images/hacs_add_repo.png)  
+	*Agregue la URL del repositorio y seleccione “Integration” como tipo.*
+
 4. Tras indexar el repositorio, vaya a **HACS → Integrations**, busque **MiPower** e instálelo.
+	![HACS instalar integración](docs/images/hacs_install_integration.png)  
+	*Instale la integración MiPower desde HACS → Integrations.*
+
 5. Reinicie Home Assistant si se le solicita.
 
 > Tras reiniciar, continúe con la sección **Configuración** abajo.
@@ -54,12 +66,24 @@ Se proporcionan dos métodos de instalación. Los archivos deben situarse en `cu
 
 ## Configuración (post-instalación)
 1. En Home Assistant vaya a **Settings → Devices & Services**.
+	![Ajustes → Dispositivos y Servicios](docs/images/settings_devices_services.png)  
+	*Abra Devices & Services (Dispositivos y Servicios) para añadir la integración.*
+
 2. Haga clic en **Add Integration**.
+	![Botón Añadir integración](docs/images/add_integration_button.png)  
+	*Pulse el botón “Add Integration” (la ubicación del botón varía según la versión de HA).*
+
 3. Busque **MiPower** y selecciónelo.
+	![Campo de búsqueda](docs/images/search_mipower.png)  
+	*Campo de búsqueda: escriba el nombre de la integración.*
+
 4. Complete el formulario de configuración:
    - **MAC address** (requerido): la MAC Bluetooth de su Mi Box S (`XX:XX:XX:XX:XX:XX`).
    - **Friendly name** (requerido): etiqueta para la entidad switch.
    - **Opcional**: seleccione una entidad `media_player` existente para enlazar la integración, si lo desea.
+   ![Formulario de configuración MiPower](docs/images/mipower_config_form.png)  
+	*Ingrese la MAC del dispositivo en formato `AA:BB:CC:DD:EE:FF`, asigne un nombre amigable y envíe.*
+
 5. Envíe. Aparecerá una nueva entidad switch (por ejemplo `switch.<friendly_name>`).
 
 ---

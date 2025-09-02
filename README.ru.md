@@ -41,11 +41,23 @@ MiPower — это пользовательская интеграция для 
 
 ### 2) Установка через HACS (рекомендуется)
 1. Откройте Home Assistant → **HACS** → **Integrations**.
+	![HACS главный экран](docs/images/hacs_main.png)  
+	*Основной вид раздела Integrations в HACS.*
+
 2. Нажмите меню из трёх точек → **Custom repositories**.
+	![HACS пользовательские репозитории](docs/images/hacs_custom_repos.png)  
+	*Откройте диалог «Custom repositories» через меню с тремя точками.*
+
 3. Добавьте репозиторий:
    - URL: `https://github.com/DenizOner/MiPower`
    - Категория / Тип: **Integration**
+	![HACS добавить репозиторий](docs/images/hacs_add_repo.png)  
+	*Добавьте URL репозитория и выберите тип «Integration».*
+
 4. После индексирования репозитория в HACS перейдите в **HACS → Integrations**, найдите **MiPower** и установите.
+	![HACS установить интеграцию](docs/images/hacs_install_integration.png)  
+	*Установите интеграцию MiPower через HACS → Integrations.*
+
 5. При необходимости перезапустите Home Assistant.
 
 > После перезапуска продолжите с разделом **Конфигурация**.
@@ -54,12 +66,24 @@ MiPower — это пользовательская интеграция для 
 
 ## Конфигурация (после установки)
 1. В Home Assistant откройте **Settings → Devices & Services**.
+	![Настройки → Устройства и Сервисы](docs/images/settings_devices_services.png)  
+	*Откройте «Devices & Services», чтобы добавить интеграцию.*
+
 2. Нажмите **Add Integration**.
+	![Кнопка Добавить интеграцию](docs/images/add_integration_button.png)  
+	*Нажмите кнопку «Add Integration» (расположение кнопки зависит от версии HA).*
+
 3. Найдите **MiPower** и выберите.
+	![Поле поиска](docs/images/search_mipower.png)  
+	*Поле поиска: введите имя интеграции.*
+
 4. Заполните форму настройки:
    - **MAC address** (обязательно): Bluetooth MAC вашего Mi Box S (`XX:XX:XX:XX:XX:XX`).
    - **Friendly name** (обязательно): метка для switch-сущности.
    - **Опционально**: при желании можно привязать существующую сущность `media_player`.
+	![Форма настройки MiPower](docs/images/mipower_config_form.png)  
+	*Введите MAC устройства в формате `AA:BB:CC:DD:EE:FF`, укажите удобное имя и отправьте.*
+
 5. Подтвердите. Появится новый switch (например, `switch.<friendly_name>`).
 
 ---
