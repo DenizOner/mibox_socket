@@ -41,20 +41,24 @@ Dosyalar `custom_components/mibox_socket` altında olmalıdır. İki kurulum yö
 
 ### 2) HACS Üzerinden Kurulum (önerilen)
 1. Home Assistant → **HACS** → **Integrations** açın.
+
 	![HACS ana ekran](docs/images/hacs_main.png)  
 	*HACS ana Entegrasyonlar görünümü.*
 	
 2. Sağ üstteki üç nokta menüsünden **Custom repositories** seçeneğine tıklayın.
+
 	![HACS özel depolar](docs/images/hacs_custom_repos.png)  
 	*Üç nokta menüsünden “Custom repositories” iletişim kutusuna erişin.*
 	
 3. Depo ekleyin:
    - Repository URL: `https://github.com/DenizOner/MiPower`
    - Kategori / Tür: **Integration**
+   
 	![HACS depo ekle](docs/images/hacs_add_repo.png)  
 	*Depo URL'sini ekleyin ve tür olarak “Integration” seçin.*
 	
 4. HACS repo'yu indeksledikten sonra **HACS → Integrations** üzerinden **MiPower**'ı bulun ve **Install** yapın.
+
 	![HACS entegrasyon yükle](docs/images/hacs_install_integration.png)  
 	*HACS → Integrations bölümünden MiPower entegrasyonunu yükleyin.*
 	
@@ -66,18 +70,22 @@ Dosyalar `custom_components/mibox_socket` altında olmalıdır. İki kurulum yö
 
 ## Yapılandırma (Kurulum sonrası - UI akışı)
 1. Home Assistant'ta **Settings → Devices & Services** menüsüne gidin.
+
 	![Ayarlar → Cihazlar & Servisler](docs/images/settings_devices_services.png)  
 	*Entegrasyonu eklemek için Devices & Services (Cihazlar & Servisler) sayfasını açın.*
 2. **Add Integration**'a tıklayın.
+
 	![Entegrasyon ekle butonu](docs/images/add_integration_button.png)  
 	*"Add Integration" (Entegrasyon Ekle) butonuna basın (buton konumu HA sürümüne göre değişir).*
 3. **MiPower** aratıp seçin.
+
 	![Arama alanı](docs/images/search_mipower.png)  
 	*Arama alanına entegrasyon adını yazın.*
 4. Yapılandırma formunu doldurun:
    - **MAC address** (zorunlu): Mi Box S’in Bluetooth MAC adresi (`XX:XX:XX:XX:XX:XX`).
    - **Friendly name** (zorunlu): switch için takma ad.
    - **Opsiyonel**: varsa bir `media_player` varlığını ilişkilendirebilirsiniz.
+   
 	![MiPower yapılandırma formu](docs/images/mipower_config_form.png)  
 	*Cihaz MAC adresini `AA:BB:CC:DD:EE:FF` formatında girin, bir takma ad ekleyin ve gönderin.*
 5. Gönderin. Yeni bir switch varlığı oluşacaktır (örn. `switch.<friendly_name>`).
