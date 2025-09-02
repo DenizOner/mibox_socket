@@ -141,3 +141,13 @@ MiPower is a fork and refinement of an earlier community workaround. The core id
 ---
 
 ## Files & Structure (what to expect after installation)
+custom_components/mibox_socket/
+├─ init.py
+├─ switch.py
+├─ config_flow.py
+├─ const.py
+├─ manifest.json
+├─ translations/
+│ ├─ en.json
+│ └─ tr.json
+└─ README.md
