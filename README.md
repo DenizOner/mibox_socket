@@ -3,10 +3,21 @@
 
 # MiPower
 
+[![GitHub Release](https://img.shields.io/github/v/release/DenizOner/MiPower?include_prereleases)](https://github.com/DenizOner/MiPower/releases)
+[![License: CC0-1.0](https://img.shields.io/badge/license-CC0%201.0-lightgrey.svg)](https://creativecommons.org/publicdomain/zero/1.0/)
+[![HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=DenizOner&repository=MiPower)
+
 MiPower is a Home Assistant custom integration that enables powering on a **Mi Box S** via Bluetooth pairing (using `bluetoothctl`). The Mi Box S does not include an IR (Infra-Red) remote receiver like some other Mi Box models; therefore, this model can only be reliably controlled via its Bluetooth remote. MiPower implements a practical workaround to address the device's deep-sleep limitation.
 
 **Why this project exists:**  
 Turning a Mi Box S **off** can be done with an ADB command, but turning it **on** is only possible with the physical remote because the device enters a deep sleep state. This integration uses the `bluetoothctl` pairing sequence to awaken the device remotely — a pragmatic workaround that helps Home Assistant users control Mi Box S devices without the original remote.
+
+---
+
+## About
+MiPower is a small, focused Home Assistant custom integration designed specifically to remotely **wake / power on a Mi Box S** using a controlled Bluetooth pairing attempt. It is not a replacement for official device APIs; it implements a pragmatic workaround where IR is unavailable and ADB cannot wake the device from deep sleep.
+
+*Key idea:* a short, automated `bluetoothctl` pairing attempt (driven by `pexpect`) behaves as a wake signal for the Mi Box S.
 
 ---
 
@@ -38,7 +49,7 @@ using [this GitHub repository][ha-addons] or by clicking the button below.
 
 [![Add Repository to HA][my-ha-badge]][my-ha-url]
 
-### 1) Manual Installation (file copy)
+### 2) Manual Installation (file copy)
 1. Create directory: `config/custom_components/mibox_socket`
 2. Copy all files from this repository's `custom_components/mibox_socket` into that directory, preserving structure (including `translations/`, `manifest.json`, `switch.py`, `config_flow.py`, `__init__.py`, `const.py`, etc.).
 3. Ensure your host has `bluetoothctl` installed and that DBus access is available to Home Assistant.
@@ -46,11 +57,13 @@ using [this GitHub repository][ha-addons] or by clicking the button below.
 
 > After restart, continue with the **Configuration** section below to add the integration in the UI.
 
-### 2) Installation via HACS (recommended)
+### 3) Installation via HACS (recommended)
 
-Simply click here:
+Just simply click here:
 
-[![Add Repository to HA][my-hacs-badge]][my-hacs-url]
+[![Add MiPower to HACS][my-hacs-badge]][my-hacs-url]
+
+Or manually continue:
 
 1. Open Home Assistant → **HACS** → **Integrations**.
 
@@ -168,8 +181,25 @@ Reference: https://creativecommons.org/publicdomain/zero/1.0/
 ## Acknowledgements & Origins
 MiPower is a fork of @frlequ's `mibox_socket` project — many core ideas and the original implementation were derived from that repository.
 
+---
+
+## Support
+If you need help or want to report an issue, please open an Issue on GitHub: https://github.com/DenizOner/MiPower/issues
+
+---
+
+## Authors & contributors
+Originally forked from @frlequ's `mibox_socket` repository. For full contributor list, check the GitHub contributors page.
+
+---
+
+## Reference links (used above)
 [ha-addons]: https://github.com/DenizOner/MiPower
 [my-ha-url]: https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FDenizOner%2FMiPower
 [my-hacs-url]: https://my.home-assistant.io/redirect/hacs_repository/?owner=DenizOner&repository=MiPower
 [my-ha-badge]: https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg
 [my-hacs-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
+[issue]: https://github.com/DenizOner/MiPower/issues
+
+
+
