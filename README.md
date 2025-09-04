@@ -47,6 +47,11 @@ using [this GitHub repository][ha-addons] or by clicking the button below.
 > After restart, continue with the **Configuration** section below to add the integration in the UI.
 
 ### 2) Installation via HACS (recommended)
+
+Simply click here:
+
+[![Add Repository to HA][my-hacs-badge]][my-hacs-url]
+
 1. Open Home Assistant → **HACS** → **Integrations**.
 
    ![HACS main screen](docs/images/hacs_main.png)
@@ -164,5 +169,7 @@ Reference: https://creativecommons.org/publicdomain/zero/1.0/
 MiPower is a fork of @frlequ's `mibox_socket` project — many core ideas and the original implementation were derived from that repository.
 
 [ha-addons]: https://github.com/DenizOner/MiPower
-[my-ha-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
-[my-ha-url]: https://my.home-assistant.io/redirect/hacs_repository/?owner=DenizOner&repository=MiPower
+[my-ha-url]: https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FDenizOner%2FMiPower
+[my-hacs-url]: https://my.home-assistant.io/redirect/hacs_repository/?owner=DenizOner&repository=MiPower
+[my-ha-badge]: https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg
+[my-hacs-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
