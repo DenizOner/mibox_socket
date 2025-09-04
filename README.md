@@ -1,6 +1,3 @@
-<!-- Language selector -->
-[English](README.md) | [Türkçe](README.tr.md) | [Español](README.es.md) | [Русский](README.ru.md)
-
 # MiPower
 
 [![GitHub Release](https://img.shields.io/github/v/release/DenizOner/MiPower?include_prereleases)](https://github.com/DenizOner/MiPower/releases)
