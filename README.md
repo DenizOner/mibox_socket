@@ -29,7 +29,14 @@ Turning a Mi Box S **off** can be done with an ADB command, but turning it **on*
 
 ## Installation
 
-Two supported installation methods are provided. Files must be placed under `custom_components/mibox_socket`.
+Three supported installation methods are provided. 
+
+### 1) Installation via My Home Assistant (one-click)
+
+To install this add-on, manually add my HA-Addons repository to Home Assistant
+using [this GitHub repository][ha-addons] or by clicking the button below.
+
+[![Add Repository to HA][my-ha-badge]][my-ha-url]
 
 ### 1) Manual Installation (file copy)
 1. Create directory: `config/custom_components/mibox_socket`
@@ -41,24 +48,28 @@ Two supported installation methods are provided. Files must be placed under `cus
 
 ### 2) Installation via HACS (recommended)
 1. Open Home Assistant → **HACS** → **Integrations**.
+
    ![HACS main screen](docs/images/hacs_main.png)
    *HACS main Integrations view.*
    
 2. Click the three-dot menu → **Custom repositories**.
+
    ![HACS custom repos menu](docs/images/hacs_custom_repos.png)
    *Access the “Custom repositories” dialog from the three-dot menu.*
    
 3. Add repository:
    - Repository URL: `https://github.com/DenizOner/MiPower`
    - Category / Type: **Integration**
-	![HACS add custom repo](docs/images/hacs_add_repo.png)
-   *Add the repository URL and select “Integration” as the type.*
+	
+ 	![HACS add custom repo](docs/images/hacs_add_repo.png)
+	*Add the repository URL and select “Integration” as the type.*
    
 4. After HACS has indexed the repository, go to **HACS → Integrations**, find **MiPower** and click **Install**.
+
    ![HACS install integration](docs/images/hacs_install_integration.png)
    *Install the MiBox Socket integration from HACS → Integrations.*
    
-5. Restart Home Assistant if prompted.
+6. Restart Home Assistant if prompted.
 
 > After restart, continue with the **Configuration** section below to add the integration in the UI.
 
@@ -66,25 +77,29 @@ Two supported installation methods are provided. Files must be placed under `cus
 
 ## Configuration (Post-installation UI flow)
 1. In Home Assistant go to **Settings → Devices & Services**.
+
    ![Settings > Devices & Services](docs/images/settings_devices_services.png)
    *Open Devices & Services to add the integration.*
    
-2. Click **Add Integration**.
+3. Click **Add Integration**.
+
    ![Add integration button](docs/images/add_integration_button.png)
    *Press "Add Integration" (button location varies by HA version).*
    
-3. Search for **MiPower** and select it.
+5. Search for **MiPower** and select it.
+
    ![Search and select MiPower](docs/images/search_mipower.png)
    *Search field: type the integration name.*
    
-4. Fill the configuration form:
+7. Fill the configuration form:
    - **MAC address** (required): Bluetooth MAC of your Mi Box S (`XX:XX:XX:XX:XX:XX`).
    - **Friendly name** (required): label for the switch entity.
    - **Optional**: choose an existing `media_player` entity to link the integration with, if desired.
+   
    ![MiPower config form](docs/images/mipower_config_form.png)
    *Enter the device MAC like `AA:BB:CC:DD:EE:FF` and a friendly name, then submit.*
    
-5. Submit. A new switch entity (e.g., `switch.<friendly_name>`) will appear in Entities.
+8. Submit. A new switch entity (e.g., `switch.<friendly_name>`) will appear in Entities.
 
 Placeholders for screenshots are included using `docs/images/*.png`. To show real screenshots, add them to `docs/images/` with the referenced filenames.
 
@@ -134,6 +149,11 @@ Use GitHub Issues for bug reports, support requests, or suggestions. Include Hom
 ## License
 This project is released into the public domain under the **Creative Commons CC0 1.0 Universal (CC0 1.0)** license. You are free to copy, modify, and distribute the work without restriction.
 Reference: https://creativecommons.org/publicdomain/zero/1.0/
+
+
+[ha-addons]: https://github.com/DenizOner/MiPower
+[my-ha-badge]: https://my.home-assistant.io/badges/hacs_repository.svg
+[my-ha-url]: https://my.home-assistant.io/redirect/hacs_repository/?owner=DenizOner&repository=MiPower
 
 ---
 
