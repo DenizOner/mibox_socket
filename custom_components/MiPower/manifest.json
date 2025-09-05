@@ -1,0 +1,17 @@
+{
+  "domain": "MiPower",
+  "name": "MiPower",
+  "version": "v1.0.3-alpha",
+  "documentation": "https://github.com/DenizOner/mibox_socket",
+  "issue_tracker": "https://github.com/DenizOner/mibox_socket/issues",
+  "dependencies": [],
+  "requirements": ["pexpect"],
+  "codeowners": ["@frlequ", "@ChatGPT", "@DenizOner"],
+  "translations": "translations",
+  "config_flow": true,
+  "iot_class": "assumed_state"
+}
+
+
+
+

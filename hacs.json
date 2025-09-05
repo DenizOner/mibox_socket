@@ -12,7 +12,7 @@
   "integration_type": "integration",
   "issue_tracker": "https://github.com/DenizOner/MiPower/issues",
   "documentation": "https://github.com/DenizOner/MiPower",
-  "codeowners": ["@frlequ, @DenizOner, @ChatGPT"],
+  "codeowners": ["@frlequ, @ChatGPT, @DenizOner"],
   "dependencies": [],
   "after_dependencies": [],
   "requirements": ["pexpect>=4.8"],
