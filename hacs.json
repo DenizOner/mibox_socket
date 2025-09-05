@@ -16,6 +16,6 @@
   "dependencies": [],
   "after_dependencies": [],
   "requirements": ["pexpect>=4.8"],
-  "country_exclude": [],
   "hide": false
 }
+
