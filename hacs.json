@@ -1,8 +1,21 @@
 {
-  "name": "Mibox Socket",
+  "name": "MiPower",
   "content_in_root": false,
-  "domains": ["mibox_socket"],
-  "homeassistant": "2021.12.0",
+  "render_readme": true,
+  "domains": ["switch"],
+  "homeassistant": "2023.12.0",
+  "iot_class": "local_push",
   "zip_release": false,
-  "render_readme": true
+  "filename": "custom_components/mipower/__init__.py",
+  "persistent_directory": "custom_components/mipower",
+  "hacs": "1.32.0",
+  "integration_type": "integration",
+  "issue_tracker": "https://github.com/DenizOner/MiPower/issues",
+  "documentation": "https://github.com/DenizOner/MiPower",
+  "codeowners": ["@frlequ, @DenizOner, @ChatGPT"],
+  "dependencies": [],
+  "after_dependencies": [],
+  "requirements": ["pexpect>=4.8"],
+  "country_exclude": [],
+  "hide": false
 }
