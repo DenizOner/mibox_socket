@@ -1,0 +1,20 @@
+# Entity-bound services. Call like:
+# service: mipower.wake_device
+# target:
+#   entity_id: switch.mipower_aa_bb_cc_dd_ee_ff
+
+wake_device:
+  name: Wake device
+  description: Wake the target device without pairing.
+  target:
+    entity:
+      integration: mipower
+      domain: switch
+
+sleep_device:
+  name: Sleep device
+  description: Put the device to sleep (disconnect) or power off depending on Options.
+  target:
+    entity:
+      integration: mipower
+      domain: switch

@@ -1,0 +1,41 @@
+{
+  "title": "MiPower",
+  "config": {
+    "step": {
+      "user": {
+        "title": "MiPower",
+        "description": "Enter the Bluetooth MAC address of your device.\nHint: {mac_hint}",
+        "data": {
+          "mac": "Bluetooth MAC address (AA:BB:CC:DD:EE:FF)"
+        }
+      }
+    },
+    "error": {
+      "invalid_mac": "Invalid MAC address format."
+    }
+  },
+  "options": {
+    "step": {
+      "general": {
+        "title": "General",
+        "description": "Timeouts, retries, disconnect delay, and polling toggle.",
+        "data": {
+          "timeout_sec": "Command timeout (seconds)",
+          "retry_count": "Retry count",
+          "retry_delay_sec": "Retry delay (seconds)",
+          "disconnect_delay_sec": "Disconnect delay after wake (seconds, step 0.1)",
+          "polling_enabled": "Enable periodic status polling"
+        }
+      },
+      "status": {
+        "title": "Status & Power",
+        "description": "Polling interval or media player fallback, and sleep behavior.",
+        "data": {
+          "polling_interval_sec": "Polling interval (seconds)",
+          "media_player_entity_id": "Media Player (used when polling is off)",
+          "sleep_command_type": "Sleep command (disconnect or power off)"
+        }
+      }
+    }
+  }
+}

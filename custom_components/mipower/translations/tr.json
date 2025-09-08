@@ -1,0 +1,41 @@
+{
+  "title": "MiPower",
+  "config": {
+    "step": {
+      "user": {
+        "title": "MiPower",
+        "description": "Cihazınızın Bluetooth MAC adresini girin.\nİpucu: {mac_hint}",
+        "data": {
+          "mac": "Bluetooth MAC adresi (AA:BB:CC:DD:EE:FF)"
+        }
+      }
+    },
+    "error": {
+      "invalid_mac": "Geçersiz MAC adresi formatı."
+    }
+  },
+  "options": {
+    "step": {
+      "general": {
+        "title": "Genel",
+        "description": "Zaman aşımı, tekrar denemeler, disconnect gecikmesi ve polling anahtarı.",
+        "data": {
+          "timeout_sec": "Komut zaman aşımı (saniye)",
+          "retry_count": "Tekrar deneme sayısı",
+          "retry_delay_sec": "Tekrar deneme gecikmesi (saniye)",
+          "disconnect_delay_sec": "Uyandırma sonrası disconnect gecikmesi (saniye, adım 0.1)",
+          "polling_enabled": "Periyodik durum sorgulamayı etkinleştir"
+        }
+      },
+      "status": {
+        "title": "Durum ve Güç",
+        "description": "Polling aralığı veya media player yedek modu ve uyku davranışı.",
+        "data": {
+          "polling_interval_sec": "Polling aralığı (saniye)",
+          "media_player_entity_id": "Media Player (polling kapalıyken kullanılır)",
+          "sleep_command_type": "Uyku komutu (disconnect veya power off)"
+        }
+      }
+    }
+  }
+}
