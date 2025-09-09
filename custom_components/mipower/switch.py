@@ -85,7 +85,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     switch = MiPowerSwitch(
         hass=hass,
-        entry=entry
+        entry=entry,
         entry_id=entry.entry_id,
         mac=mac,
         client_factory=client_factory,
@@ -340,6 +340,7 @@ async def async_added_to_hass(self) -> None:
 
     async def async_service_sleep(self) -> None:
         await self.async_turn_off()
+
 
 
 
