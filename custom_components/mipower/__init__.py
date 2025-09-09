@@ -51,10 +51,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # ✅ Hub cihazını device registry'ye ekle (hub:<MAC> olarak ayrı bir cihaz)
     mac = entry.data.get("mac", "UNKNOWN")
     device_registry = dr.async_get(hass)
-device_registry.async_get_or_create(
-    config_entry_id=entry.entry_id,
-    identifiers={(DOMAIN, mac)},
-    manufacturer="Xiaomi / Bluetooth",
+    device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, mac)},
+        manufacturer="Xiaomi / Bluetooth",
         model="MiPower",
         name=f"MiPower {mac}",  # Hub adı otomatik: MiPower + MAC
         sw_version="",
@@ -69,6 +69,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload MiPower config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     return unload_ok
+
 
 
 
