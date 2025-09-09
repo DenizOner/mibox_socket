@@ -80,7 +80,7 @@ class MiPowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(mac)
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
-                    title=mac,
+                    title=user_input[CONF_NAME],
                     data={CONF_MAC: mac},
                 )
         schema = vol.Schema(
@@ -275,5 +275,6 @@ class MiPowerOptionsFlow(config_entries.OptionsFlow):
             data_schema=schema,
             errors=errors,
         )
+
 
 
