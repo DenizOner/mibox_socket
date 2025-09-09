@@ -143,7 +143,7 @@ class MiPowerSwitch(SwitchEntity):
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            identifiers={(DOMAIN, f"dev:{self._mac}")},
+            identifiers={(DOMAIN, mac)},
             name=self._given_name,
             manufacturer="Xiaomi (Mi Box S family) / Bluetooth",
             model="MiPower",
@@ -336,6 +336,7 @@ async def async_added_to_hass(self) -> None:
 
     async def async_service_sleep(self) -> None:
         await self.async_turn_off()
+
 
 
 
