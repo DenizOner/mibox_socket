@@ -101,10 +101,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     async_add_entities([switch])
 
 class MiPowerSwitch(SwitchEntity):
-    # Entity adını direkt kendi üzerinde gösterelim (tek isim)
     _attr_has_entity_name = False
-    # Switch ikonu kullanıcı isteğine göre
-    _attr_icon = "mdi:power"
+    _attr_icon = "mdi:power"  # switch icon
 
     def __init__(
         self,
@@ -337,6 +335,7 @@ async def async_added_to_hass(self) -> None:
 
     async def async_service_sleep(self) -> None:
         await self.async_turn_off()
+
 
 
 
