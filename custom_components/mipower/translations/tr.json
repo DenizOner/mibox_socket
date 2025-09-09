@@ -6,6 +6,7 @@
         "title": "MiPower",
         "description": "Cihazınızın Bluetooth MAC adresini girin.\nİpucu: Muhtemelen E0:B6:55:**:**:** ile başlar",
         "data": {
+          "name": "Cihaz adı",
           "mac": "Bluetooth MAC adresi (AA:BB:CC:DD:EE:FF)"
         }
       }
@@ -42,6 +43,3 @@
     }
   }
 }
-
-
-
