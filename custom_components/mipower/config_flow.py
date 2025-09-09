@@ -186,10 +186,10 @@ class MiPowerOptionsFlow(config_entries.OptionsFlow):
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_TIMEOUT_SEC, default=self._options.get(CONF_TIMEOUT_SEC, DEFAULT_TIMEOUT_SEC)): float,
+                vol.Required(CONF_TIMEOUT_SEC, default=self._options.get(CONF_TIMEOUT_SEC, DEFAULT_TIMEOUT_SEC)): vol.Coerce(float),
                 vol.Required(CONF_RETRY_COUNT, default=self._options.get(CONF_RETRY_COUNT, DEFAULT_RETRY_COUNT)): int,
-                vol.Required(CONF_RETRY_DELAY_SEC, default=self._options.get(CONF_RETRY_DELAY_SEC, DEFAULT_RETRY_DELAY_SEC)): float,
-                vol.Required(CONF_DISCONNECT_DELAY_SEC, default=self._options.get(CONF_DISCONNECT_DELAY_SEC, DEFAULT_DISCONNECT_DELAY_SEC)): float,
+                vol.Required(CONF_RETRY_DELAY_SEC, default=self._options.get(CONF_RETRY_DELAY_SEC, DEFAULT_RETRY_DELAY_SEC)): vol.Coerce(float),
+                vol.Required(CONF_DISCONNECT_DELAY_SEC, default=self._options.get(CONF_DISCONNECT_DELAY_SEC, DEFAULT_DISCONNECT_DELAY_SEC)): vol.Coerce(float),
                 vol.Required(
                     CONF_POLLING_ENABLED,
                     default=self._options.get(CONF_POLLING_ENABLED, DEFAULT_POLLING_ENABLED)
@@ -277,6 +277,7 @@ class MiPowerOptionsFlow(config_entries.OptionsFlow):
             data_schema=schema,
             errors=errors,
         )
+
 
 
 
