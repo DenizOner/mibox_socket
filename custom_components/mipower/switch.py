@@ -13,11 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+
 from typing import Any, Callable, Coroutine
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_ON, STATE_PLAYING, STATE_IDLE, STATE_OFF
+from homeassistant.const import STATE_ON, STATE_PLAYING, STATE_IDLE, STATE_OFF, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity import DeviceInfo
@@ -335,6 +336,7 @@ async def async_added_to_hass(self) -> None:
 
     async def async_service_sleep(self) -> None:
         await self.async_turn_off()
+
 
 
 
