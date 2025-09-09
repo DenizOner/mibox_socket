@@ -12,10 +12,8 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME, CONF_ENTITY_ID
 from homeassistant.core import HomeAssistant, callback
+
 from homeassistant.helpers.selector import (
-    SelectSelector,
-    SelectSelectorConfig,
-    SelectSelectorMode,
     EntitySelector,
     EntitySelectorConfig,
 )
@@ -56,7 +54,6 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-
 def _mac_help_text(hass: HomeAssistant) -> str:
     # Localized via translations; key is mipower.config.mac_hint
     # Fallback here in case translations not loaded.
@@ -92,11 +89,11 @@ class MiPowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_MAC): str,
             }
         )
+        
         return self.async_show_form(
             step_id="user",
             data_schema=schema,
             errors=errors,
-            description_placeholders={"mac_hint": self.hass.config.language},  # placeholder key only
         )
 
     @staticmethod
@@ -204,7 +201,6 @@ class MiPowerOptionsFlow(config_entries.OptionsFlow):
             step_id="general",
             data_schema=schema,
             errors=errors,
-            description_placeholders={"mac_hint": "Muhtemelen E0:B6:55:**:**:** ile başlar"},
         )
 
     async def async_step_status(self, user_input: dict[str, Any] | None = None):
@@ -281,6 +277,7 @@ class MiPowerOptionsFlow(config_entries.OptionsFlow):
             data_schema=schema,
             errors=errors,
         )
+
 
 
 
