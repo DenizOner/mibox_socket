@@ -150,6 +150,18 @@ class MiPowerSwitch(SwitchEntity):
             manufacturer="Xiaomi (Mi Box S family) / Bluetooth",
             model="MiPower",
         )
+     
+      def turn_on(self, **kwargs):
+          """Sync wrapper for async_turn_on."""
+          return asyncio.run_coroutine_threadsafe(
+              self.async_turn_on(**kwargs), self.hass.loop
+          ).result()
+      
+      def turn_off(self, **kwargs):
+          """Sync wrapper for async_turn_off."""
+          return asyncio.run_coroutine_threadsafe(
+              self.async_turn_off(**kwargs), self.hass.loop
+          ).result()
 
     @property
     def is_on(self) -> bool | None:
@@ -326,5 +338,6 @@ async def async_added_to_hass(self) -> None:
 
     async def async_service_sleep(self) -> None:
         await self.async_turn_off()
+
 
 
