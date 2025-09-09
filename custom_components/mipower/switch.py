@@ -136,7 +136,7 @@ class MiPowerSwitch(SwitchEntity):
         self._coordinator = coordinator
 
         self._attr_unique_id = f"{self._mac}_switch"
-        self._attr_name = f"MiPower {self._mac}"
+        self._attr_name = entry.data.get(CONF_NAME, f"MiPower {self._mac}")
         self._attr_available = True
         self._is_on_cached: bool | None = None
 
@@ -326,4 +326,5 @@ async def async_added_to_hass(self) -> None:
 
     async def async_service_sleep(self) -> None:
         await self.async_turn_off()
+
 
