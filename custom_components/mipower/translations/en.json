@@ -6,6 +6,7 @@
         "title": "MiPower",
         "description": "Enter the Bluetooth MAC address of your device.\nHint: Probably starts with E0:B6:55:**:**:**",
         "data": {
+          "name": "Device name",
           "mac": "Bluetooth MAC address (AA:BB:CC:DD:EE:FF)"
         }
       }
