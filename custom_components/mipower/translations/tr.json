@@ -1,11 +1,10 @@
 {
   "title": "MiPower",
   "config": {
-    "mac_hint": "Muhtemelen E0:B6:55:**:**:** ile başlar",
     "step": {
       "user": {
         "title": "MiPower",
-        "description": "Cihazınızın Bluetooth MAC adresini girin.\nİpucu: {mac_hint}",
+        "description": "Cihazınızın Bluetooth MAC adresini girin.\nİpucu: Muhtemelen E0:B6:55:**:**:** ile başlar",
         "data": {
           "mac": "Bluetooth MAC adresi (AA:BB:CC:DD:EE:FF)"
         }
@@ -40,4 +39,5 @@
     }
   }
 }
+
 
