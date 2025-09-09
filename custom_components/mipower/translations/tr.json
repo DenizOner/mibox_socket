@@ -11,7 +11,10 @@
       }
     },
     "error": {
-      "invalid_mac": "Geçersiz MAC adresi formatı."
+      "invalid_mac": "Geçersiz MAC adresi formatı.",
+      "required": "Bu alan zorunludur.",
+      "out_of_range": "Değer izin verilen aralığın dışında.",
+      "invalid_option": "Geçersiz seçenek."
     }
   },
   "options": {
@@ -39,5 +42,6 @@
     }
   }
 }
+
 
 
