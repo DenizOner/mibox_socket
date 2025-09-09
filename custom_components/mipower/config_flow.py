@@ -80,8 +80,11 @@ class MiPowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(mac)
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
-                    title=user_input[CONF_NAME],
-                    data={CONF_MAC: mac},
+                    title=f"MiPower {mac}",  # Hub adı otomatik
+                    data={
+                        CONF_MAC: mac,
+                        CONF_NAME: user_input[CONF_NAME],  # Switch adı olarak kullanılacak
+                    },
                 )
         schema = vol.Schema(
             {
@@ -278,6 +281,7 @@ class MiPowerOptionsFlow(config_entries.OptionsFlow):
             data_schema=schema,
             errors=errors,
         )
+
 
 
 
