@@ -93,7 +93,7 @@ class MiPowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=schema,
             errors=errors,
-            description_placeholders={"mac_hint": _mac_help_text(self.hass)},
+            description_placeholders={"mac_hint": self.hass.config.language},  # placeholder key only
         )
 
     @staticmethod
@@ -275,3 +275,4 @@ class MiPowerOptionsFlow(config_entries.OptionsFlow):
             data_schema=schema,
             errors=errors,
         )
+
