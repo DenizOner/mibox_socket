@@ -11,7 +11,10 @@
       }
     },
     "error": {
-      "invalid_mac": "Invalid MAC address format."
+      "invalid_mac": "Invalid MAC address format.",
+      "required": "This field is required.",
+      "out_of_range": "Value out of allowed range.",
+      "invalid_option": "Invalid option."
     }
   },
   "options": {
@@ -39,5 +42,3 @@
     }
   }
 }
-
-
