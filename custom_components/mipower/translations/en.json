@@ -1,6 +1,7 @@
 {
   "title": "MiPower",
   "config": {
+    "mac_hint": "Probably starts with E0:B6:55:**:**:**",
     "step": {
       "user": {
         "title": "MiPower",
@@ -39,3 +40,4 @@
     }
   }
 }
+
