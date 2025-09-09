@@ -169,12 +169,16 @@ class MiPowerSwitch(SwitchEntity):
         # Consider playing/on/idle as "on"
         return str(state) in (STATE_ON, STATE_PLAYING, STATE_IDLE)
 
-    async def async_added_to_hass(self) -> None:
-        # Subscribe to media_player state changes if polling is disabled
-        if not self._polling_enabled and self._media_player_entity_id:
-            self._unsub_media_listener = async_track_state_change_event(
-                self.hass, [self._media_player_entity_id], self._handle_media_state_event
-            )
+async def async_added_to_hass(self) -> None:
+    # Subscribe to media_player state changes if polling is disabled
+    if not self._polling_enabled and self._media_player_entity_id:
+        # Set initial cached state from media_player
+        st = self.hass.states.get(self._media_player_entity_id)
+        if st:
+            self._is_on_cached = self._map_media_state_to_on(st.state)
+        self._unsub_media_listener = async_track_state_change_event(
+            self.hass, [self._media_player_entity_id], self._handle_media_state_event
+        )
 
     async def async_will_remove_from_hass(self) -> None:
         if self._unsub_media_listener:
@@ -322,3 +326,4 @@ class MiPowerSwitch(SwitchEntity):
 
     async def async_service_sleep(self) -> None:
         await self.async_turn_off()
+
