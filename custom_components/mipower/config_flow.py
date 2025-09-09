@@ -83,9 +83,9 @@ class MiPowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     title=mac,
                     data={CONF_MAC: mac},
                 )
-
         schema = vol.Schema(
             {
+                vol.Required(CONF_NAME): str,
                 vol.Required(CONF_MAC): str,
             }
         )
@@ -275,4 +275,5 @@ class MiPowerOptionsFlow(config_entries.OptionsFlow):
             data_schema=schema,
             errors=errors,
         )
+
 
