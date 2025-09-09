@@ -85,7 +85,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     switch = MiPowerSwitch(
         hass=hass,
-        entry=entry,
+        entry=entry,  # ✅ entry’yi geç
         entry_id=entry.entry_id,
         mac=mac,
         client_factory=client_factory,
@@ -100,20 +100,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     async_add_entities([switch])
 
-    # Register entity-bound services
-    platform = entity_platform.async_get_current_platform()
-    platform.async_register_entity_service(SERVICE_WAKE, {}, "async_service_wake")
-    platform.async_register_entity_service(SERVICE_SLEEP, {}, "async_service_sleep")
-
-
 class MiPowerSwitch(SwitchEntity):
-    _attr_has_entity_name = True
-    _attr_icon = DEFAULT_ICON
+    # Entity adını direkt kendi üzerinde gösterelim (tek isim)
+    _attr_has_entity_name = False
+    # Switch ikonu kullanıcı isteğine göre
+    _attr_icon = "mdi:power"
 
     def __init__(
         self,
         hass: HomeAssistant,
-        entry: ConfigEntry,
+        entry: ConfigEntry,  # ✅ entry’yi parametre olarak al
         entry_id: str,
         mac: str,
         client_factory: Callable[[], BluetoothCtlClient],
@@ -138,7 +134,8 @@ class MiPowerSwitch(SwitchEntity):
         self._coordinator = coordinator
 
         self._attr_unique_id = f"{self._mac}_switch"
-        self._attr_name = entry.data.get(CONF_NAME, f"MiPower {self._mac}")
+        self._given_name: str = entry.data.get(CONF_NAME, f"MiPower {self._mac}")
+        self._attr_name = self._given_name
         self._attr_available = True
         self._is_on_cached: bool | None = None
 
@@ -147,12 +144,12 @@ class MiPowerSwitch(SwitchEntity):
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            identifiers={(DOMAIN, self._mac)},
-            name=f"MiPower {self._mac}",
+            identifiers={(DOMAIN, f"dev:{self._mac}")},
+            name=self._given_name,
             manufacturer="Xiaomi (Mi Box S family) / Bluetooth",
             model="MiPower",
         )
-     
+
     def turn_on(self, **kwargs):
         """Sync wrapper for async_turn_on."""
         return asyncio.run_coroutine_threadsafe(
@@ -340,6 +337,7 @@ async def async_added_to_hass(self) -> None:
 
     async def async_service_sleep(self) -> None:
         await self.async_turn_off()
+
 
 
 
