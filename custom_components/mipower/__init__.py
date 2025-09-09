@@ -14,6 +14,7 @@ import shutil
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN
 
@@ -48,7 +49,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
 
         # Hub cihazını device registry'ye ekle
-    device_registry = hass.helpers.device_registry.async_get(hass)
+    device_registry = dr.async_get(hass)
     mac = entry.data.get("mac", "UNKNOWN")
     device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
@@ -68,4 +69,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload MiPower config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     return unload_ok
+
 
