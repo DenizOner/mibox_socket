@@ -91,8 +91,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
          - BleakClient (if available via custom_components/mipower/bleak.py and bleak installed)
          - BluetoothCtlClient (fallback; uses bluetoothctl subprocess)
         """
-        # Try optional Bleak backend (added separately). Importing here avoids
-        # blocking at module import time.
         try:
             from .bleak import BleakClient  # type: ignore
         except Exception:
@@ -100,7 +98,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
         if BleakClient is not None:
             try:
-                # BleakClient may raise BluetoothCtlError if bleak isn't installed.
                 return BleakClient(timeout_sec=timeout_sec)  # type: ignore
             except BluetoothCtlError:
                 _LOGGER.debug("Bleak backend exists but is not usable; falling back to bluetoothctl")
@@ -264,148 +261,4 @@ class MiPowerSwitch(SwitchEntity):
                     )
                     # Orijinal exception'ı yeniden yükselt (böylece üst katman uygun şekilde ele alır)
                     raise
-                # Aksi halde tekrar dene: bilgi amaçlı log ve kısa bekleme
-                _LOGGER.debug(
-                    "Operation failed (%s). Retrying %s/%s in %.1fs",
-                    exc,
-                    attempt,
-                    self._retry_count,
-                    self._retry_delay_sec,
-                )
-                await asyncio.sleep(self._retry_delay_sec)
-
-    async def _do_info(self) -> dict[str, Any]:
-        """Fetch device info via client backend."""
-        client = self._client_factory()
-        info = await client.info(self._mac)
-        # The client.info may return an object or dict; normalize here
-        res = {}
-        if isinstance(info, dict):
-            res = info
-        else:
-            # Fallback object attributes
-            res = {
-                "connected": getattr(info, "connected", None),
-                "paired": getattr(info, "paired", None),
-                "trusted": getattr(info, "trusted", None),
-                "raw": getattr(info, "raw", None),
-                "name": getattr(info, "name", None),
-                "address": getattr(info, "address", None),
-            }
-        return res
-
-    async def _wake_sequence(self) -> bool:
-        """Wake without pairing:
-        - info -> if already connected/awake, no-op (success)
-        - connect -> short wait -> disconnect
-        - info verify -> connected(True) preferred but some devices won't keep it; treat as best-effort
-        """
-        try:
-            info_before = await self._retrying(lambda: self._do_info())
-            if info_before.get("connected") is True:
-                _LOGGER.info("Device %s already connected/awake; no-op", self._mac)
-                return True
-
-            client = self._client_factory()
-
-            # Pairing attempts must abort the flow
-            try:
-                await self._retrying(lambda: client.connect(self._mac))
-            except BluetoothCtlPairingRequestedError:
-                _LOGGER.warning(
-                    "Pairing requested by device/controller; aborting wake for %s", self._mac
-                )
-                return False
-
-            # Allow device to process the wake signal
-            await asyncio.sleep(self._disconnect_delay_sec)
-
-            # Best-effort disconnect
-            try:
-                await self._retrying(lambda: client.disconnect(self._mac))
-            except BluetoothCtlError:
-                _LOGGER.debug("Disconnect after wake failed; continuing (best-effort).")
-
-            # Verify
-            info_after = await self._retrying(lambda: self._do_info())
-            # Many devices report disconnected after wake; consider success if no pairing or fatal errors occurred
-            connected = info_after.get("connected")
-            # If connected True => success; if False => treat as success for devices that don't stay connected
-            return True if connected is True or connected is False else True
-
-        except BluetoothCtlPairingRequestedError:
-            _LOGGER.warning("Pairing requested; abort wake for %s", self._mac)
-            return False
-        except (BluetoothCtlTimeoutError, BluetoothCtlNotFoundError) as exc:
-            _LOGGER.warning("Wake failed for %s: %s", self._mac, exc)
-            return False
-        except BluetoothCtlError as exc:
-            _LOGGER.error("Wake error for %s: %s", self._mac, exc)
-            return False
-        except Exception as exc:
-            _LOGGER.error("Unexpected wake error for %s: %s", self._mac, exc)
-            return False
-
-    async def _sleep_sequence(self) -> bool:
-        """Sleep:
-        - If option is 'disconnect': best-effort disconnect
-        - If option is 'power_off': best-effort power off (may affect controller; documented)
-        - Verify with info()
-        """
-        client = self._client_factory()
-        try:
-            if self._sleep_cmd_type == SLEEP_CMD_POWER_OFF:
-                try:
-                    await self._retrying(lambda: client.power_off(None))
-                except BluetoothCtlPairingRequestedError:
-                    _LOGGER.warning("Pairing requested on power_off; aborting sleep for %s", self._mac)
-                    return False
-            else:
-                await self._retrying(lambda: client.disconnect(self._mac))
-
-            info = await self._retrying(lambda: self._do_info())
-            connected = info.get("connected")
-            # If disconnected or unknown, treat as 'off'
-            return (connected is False) or (connected is None)
-
-        except (BluetoothCtlTimeoutError, BluetoothCtlNotFoundError) as exc:
-            _LOGGER.warning("Sleep failed for %s: %s", self._mac, exc)
-            return False
-        except BluetoothCtlError as exc:
-            _LOGGER.error("Sleep error for %s: %s", self._mac, exc)
-            return False
-        except Exception as exc:
-            _LOGGER.error("Unexpected sleep error for %s: %s", self._mac, exc)
-            return False
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Entity-level turn_on: runs wake sequence and update HA state."""
-        self._attr_available = True
-        ok = await self._wake_sequence()
-        if ok:
-            self._is_on_cached = True
-            # Durum değişti — hemen HA'ya yaz.
-            self.async_write_ha_state()
-        else:
-            # Problem var: entity artık kullanılamıyor gibi göster.
-            self._attr_available = False
-            self.async_write_ha_state()
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Entity-level turn_off: runs sleep sequence and update HA state."""
-        self._attr_available = True
-        ok = await self._sleep_sequence()
-        if ok:
-            self._is_on_cached = False
-            # Durum değişti — hemen HA'ya yaz.
-            self.async_write_ha_state()
-        else:
-            self._attr_available = False
-            self.async_write_ha_state()
-
-    # Entity-bound services (no parameters)
-    async def async_service_wake(self) -> None:
-        await self.async_turn_on()
-
-    async def async_service_sleep(self) -> None:
-        await self.async_turn_off()
+                # Aksi halde tekrar dene: bilgi amaçlı log ve k
