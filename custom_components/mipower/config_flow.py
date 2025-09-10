@@ -10,7 +10,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_NAME, CONF_ENTITY_ID
+from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 
 from homeassistant.helpers.selector import (
@@ -53,12 +53,6 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-def _mac_help_text(hass: HomeAssistant) -> str:
-    # Localized via translations; key is mipower.config.mac_hint
-    # Fallback here in case translations not loaded.
-    return "Muhtemelen E0:B6:55:**:**:** ile başlar / Probably starts with E0:B6:55:**:**:**"
-
 
 class MiPowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for MiPower."""
@@ -277,6 +271,7 @@ class MiPowerOptionsFlow(config_entries.OptionsFlow):
             data_schema=schema,
             errors=errors,
         )
+
 
 
 
