@@ -35,11 +35,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.critical("bluetoothctl not found on system PATH. Cannot set up MiPower.")
         # Persistent Notification with TR/EN hint
         hass.components.persistent_notification.create(
-            title="MiPower",
             message=hass.helpers.translation.async_get_localized_string(
-                f"{DOMAIN}.error.missing_bluetoothctl"
+                "component.mipower.notification.missing_bluetoothctl"
             ),
-            notification_id=f"{DOMAIN}_missing_bluetoothctl",
+            title="MiPower",
+            notification_id="mipower_bluetoothctl_missing",
         )
         # Reject setup
         return False
@@ -64,6 +64,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload MiPower config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     return unload_ok
+
 
 
 
