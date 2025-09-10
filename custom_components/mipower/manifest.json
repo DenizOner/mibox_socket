@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "documentation": "https://github.com/your-org-or-user/mipower",
   "issue_tracker": "https://github.com/your-org-or-user/mipower/issues",
-  "codeowners": ["@DenizOner"],
+  "codeowners": ["@frlequ, @ChatGPT, @DenizOner"],
   "iot_class": "local_push",
-  "icon": "mdi:power-settings"
+  "icon": "mdi:power-settings",
   "loggers": ["custom_components.mipower"],
   "dependencies": [],
   "after_dependencies": [],
@@ -16,6 +16,7 @@
   "quality_scale": "silver",
   "min_homeassistant_version": "2024.8.0"
 }
+
 
 
 
