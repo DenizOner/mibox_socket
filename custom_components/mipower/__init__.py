@@ -30,7 +30,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     Environment check: bluetoothctl must be available on PATH.
     If missing, we reject the setup and show a persistent notification with guidance.
     """
-    LOGGER.debug("Setting up MiPower integration")
+    _LOGGER.debug("Setting up MiPower integration")
     if shutil.which("bluetoothctl") is None:
         _LOGGER.critical("bluetoothctl not found on system PATH. Cannot set up MiPower.")
         # Persistent Notification with TR/EN hint
@@ -64,6 +64,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload MiPower config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     return unload_ok
+
 
 
 
