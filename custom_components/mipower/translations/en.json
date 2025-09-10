@@ -11,6 +11,9 @@
         }
       }
     },
+    "warning": {
+      "pairing_requested": "Pairing requested by device/controller; aborting wake for {mac}"
+    },
     "error": {
       "invalid_mac": "Invalid MAC address format.",
       "required": "This field is required.",
@@ -44,5 +47,3 @@
     }
   }
 }
-
-
