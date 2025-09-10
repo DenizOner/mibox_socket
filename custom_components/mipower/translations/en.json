@@ -15,7 +15,8 @@
       "invalid_mac": "Invalid MAC address format.",
       "required": "This field is required.",
       "out_of_range": "Value out of allowed range.",
-      "invalid_option": "Invalid option."
+      "invalid_option": "Invalid option.",
+      "missing_bluetoothctl": "bluetoothctl bulunamadı. Lütfen BlueZ paketini kurun ve Home Assistant'ı yeniden başlatın.\n- Debian/Ubuntu: sudo apt install bluez\n- Docker: Host üzerinde BlueZ/DBus ve uygun izinler gerekebilir.\n" 
     }
   },
   "options": {
@@ -43,3 +44,4 @@
     }
   }
 }
+
