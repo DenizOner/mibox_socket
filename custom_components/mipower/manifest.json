@@ -10,12 +10,13 @@
   "loggers": ["custom_components.mipower"],
   "dependencies": [],
   "after_dependencies": [],
-  "requirements": [],
+  "requirements": ["bleak>=0.20.0"],
   "integration_type": "hub",
   "config_flow": true,
   "quality_scale": "silver",
   "min_homeassistant_version": "2024.8.0"
 }
+
 
 
 
