@@ -49,7 +49,7 @@ It is fully asynchronous, uses non‑interactive commands, and follows a **"abor
 
 #### A) As a Custom Repository (immediate use)
 1. Go to **HACS > Integrations >** three‑dot menu > **Custom repositories**
-2. Repository URL: `https://github.com/your-org-or-user/mipower`
+2. Repository URL: `https://github.com/DenizOner/mipower`
 3. Category: **Integration**
 4. Click **Add**, then install MiPower from HACS
 5. Restart Home Assistant
@@ -232,4 +232,14 @@ MIT — see LICENSE file.
 ## Changelog
 
 - **0.1.0**: Initial release — async bluetoothctl, pairing‑free wake, optional polling, media_player fallback, wake/sleep services, advanced settings.
+
+---
+
+## Important notes
+
+- This integration supports two BLE backends:
+  - `bleak` (recommended when available) — cross-platform Python BLE client.
+  - `bluetoothctl` (BlueZ) fallback — requires `bluetoothctl` (BlueZ) installed on the host.
+
+If using the BlueZ fallback, ensure the host has `bluetoothctl` (BlueZ) installed and the Home Assistant process has permission to access the bluetooth adapter.
 
