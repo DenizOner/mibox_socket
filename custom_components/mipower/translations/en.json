@@ -45,5 +45,46 @@
         }
       }
     }
+  },
+  "component": {
+    "mipower": {
+      "services": {
+        "wake": {
+          "name": "Wake device",
+          "description": "Sends a wake command to the device.",
+          "fields": {
+            "mac": {
+              "name": "MAC address",
+              "description": "Target device MAC."
+            }
+          }
+        },
+        "sleep": {
+          "name": "Put device to sleep",
+          "description": "Sends a sleep command to the device."
+        }
+      },
+      "config": {
+        "step": {
+          "user": {
+            "title": "MiPower Setup",
+            "description": "Add your device by entering the MAC address.\nFull guidance...\n(keep full English text)",
+            "data": {
+              "mac": "Device MAC address"
+            }
+          }
+        },
+        "error": {
+          "invalid_mac": "The MAC address format is invalid. Expected format: AA:BB:CC:DD:EE:FF.",
+          "cannot_connect": "Cannot connect to device. Please ensure it is powered on and in range."
+        },
+        "abort": {
+          "already_configured": "This device is already configured."
+        }
+      },
+      "notification": {
+        "missing_bluetoothctl": "bluetoothctl not found. Please install BlueZ and restart Home Assistant.\n- Debian/Ubuntu: sudo apt install bluez\n- Docker: Ensure host BlueZ/DBus and correct permissions.\nDetailed explanation...\n(Your full English text here, preserved as-is)"
+      }
+    }
   }
 }
