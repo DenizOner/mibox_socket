@@ -109,9 +109,12 @@ class BluetoothCtlClient:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
+            
+        except FileNotFoundError as exc:
+            raise BluetoothCtlEnvError("bluetoothctl komutu sistemde bulunamadı. Lütfen BlueZ kurulu olduğundan emin olun.") from exc
         except Exception as exc:
-            raise BluetoothCtlEnvError(f"Failed to start bluetoothctl: {exc}") from exc
-
+            raise BluetoothCtlEnvError(f"bluetoothctl başlatılamadı: {exc}") from exc
+            
         try:
             stdout_bytes, _ = await asyncio.wait_for(proc.communicate(), timeout=self._timeout_sec)
         except asyncio.TimeoutError as exc:
@@ -197,5 +200,6 @@ class BluetoothCtlClient:
         out = await self._run("power", "off")
         self._classify_common_errors(out)
         return out
+
 
 
