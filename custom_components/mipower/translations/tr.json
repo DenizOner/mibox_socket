@@ -16,6 +16,7 @@
       "required": "Bu alan zorunludur.",
       "out_of_range": "Değer izin verilen aralığın dışında.",
       "invalid_option": "Geçersiz seçenek."
+      "missing_bluetoothctl": "bluetoothctl bulunamadı. Lütfen BlueZ paketini kurun ve Home Assistant'ı yeniden başlatın.\n- Debian/Ubuntu: sudo apt install bluez\n- Docker: Host üzerinde BlueZ/DBus ve uygun izinler gerekebilir.\n" 
     }
   },
   "options": {
@@ -43,3 +44,4 @@
     }
   }
 }
+
