@@ -20,7 +20,6 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_ON, STATE_PLAYING, STATE_IDLE, STATE_OFF, CONF_NAME
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_platform
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.typing import StateType
@@ -53,7 +52,6 @@ from .const import (
     DEFAULT_DISCONNECT_DELAY_SEC,
     SLEEP_CMD_DISCONNECT,
     SLEEP_CMD_POWER_OFF,
-    DEFAULT_ICON,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -144,23 +142,11 @@ class MiPowerSwitch(SwitchEntity):
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
-            identifiers={(DOMAIN, mac)},
+            identifiers={(DOMAIN, self._mac)},
             name=self._given_name,
             manufacturer="Xiaomi (Mi Box S family) / Bluetooth",
             model="MiPower",
         )
-
-    def turn_on(self, **kwargs):
-        """Sync wrapper for async_turn_on."""
-        return asyncio.run_coroutine_threadsafe(
-            self.async_turn_on(**kwargs), self.hass.loop
-        ).result()
-      
-    def turn_off(self, **kwargs):
-        """Sync wrapper for async_turn_off."""
-        return asyncio.run_coroutine_threadsafe(
-            self.async_turn_off(**kwargs), self.hass.loop
-        ).result()
 
     @property
     def is_on(self) -> bool | None:
@@ -180,7 +166,7 @@ class MiPowerSwitch(SwitchEntity):
         # Consider playing/on/idle as "on"
         return str(state) in (STATE_ON, STATE_PLAYING, STATE_IDLE)
 
-async def async_added_to_hass(self) -> None:
+    async def async_added_to_hass(self) -> None:
     # Subscribe to media_player state changes if polling is disabled
     if not self._polling_enabled and self._media_player_entity_id:
         # Set initial cached state from media_player
@@ -250,10 +236,8 @@ async def async_added_to_hass(self) -> None:
                 await self._retrying(lambda: client.connect(self._mac))
             except BluetoothCtlPairingRequestedError:
                 _LOGGER.warning(
-                    hass.helpers.translation.async_get_localized_string(
-                        f"{DOMAIN}.warning.pairing_requested"
-                    ),
-                    self._mac
+                    "Pairing requested by device/controller; aborting wake for %s",
+                    self._mac,
                 )
                 return False
 
@@ -342,6 +326,7 @@ async def async_added_to_hass(self) -> None:
 
     async def async_service_sleep(self) -> None:
         await self.async_turn_off()
+
 
 
 
