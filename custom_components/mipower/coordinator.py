@@ -1,18 +1,13 @@
-"""
-MiPower DataUpdateCoordinator for optional polling.
-"""
+"""MiPower DataUpdateCoordinator for optional polling."""
 
 from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from typing import Any, Callable
+from typing import Any, Callable, Dict
 
 from homeassistant.core import HomeAssistant
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.exceptions import UpdateFailed
 
 from .bluetoothctl import (
     BluetoothCtlClient,
@@ -26,21 +21,20 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
-class MiPowerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """
-    Coordinator holds the latest parsed info() results.
+class MiPowerCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
+    """Coordinator that holds the latest parsed info() results.
 
-    data example:
+    Data structure example:
     {
-        "connected": True/False/None,
-        "paired": True/False/None,
-        "trusted": True/False/None,
+        "connected": True|False|None,
+        "paired": True|False|None,
+        "trusted": True|False|None,
         "name": str|None,
         "address": str|None,
-        "raw": str,
+        "raw": str|None,
     }
     """
-    
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -57,43 +51,44 @@ class MiPowerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._mac = mac
         self._client_factory = client_factory
 
-    async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
-        coordinator = MiPowerCoordinator(hass, entry)
-        hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
-    
-        # İlk yüklemede coordinator veri çekmeye çalışır. Eğer cihaz ulaşılmazsa
-        # ConfigEntryNotReady fırlatılarak HA'nın daha sonra yeniden denemesi sağlanır.
-        try:
-            await coordinator.async_config_entry_first_refresh()
-        except UpdateFailed as exc:
-            # Genellikle bağlantı/zaman aşımı kaynaklı olabilir
-            raise ConfigEntryNotReady(
-                f"Initial data fetch failed for {entry.entry_id}: {exc}"
-            ) from exc
-    
-        # platform yüklemeleri burada devam eder...
-    
-    async def _async_update_data(self) -> dict[str, Any]:
+    async def _async_update_data(self) -> Dict[str, Any]:
+        """Fetch data from device using the configured client backend.
+
+        Convert results to a normalized dict regardless of backend return type.
+        Raise UpdateFailed for transient/unrecoverable update errors so the
+        DataUpdateCoordinator machinery can handle retries.
+        """
         client = self._client_factory()
         try:
             info = await client.info(self._mac)
         except BluetoothCtlPairingRequestedError as exc:
-            # Pairing is not desired; classify as warning and keep last data.
+            # Pairing is not desired; classify as failure for this update cycle.
             raise UpdateFailed(f"Pairing requested: {exc}") from exc
         except (BluetoothCtlTimeoutError, BluetoothCtlNotFoundError) as exc:
-            # Device unreachable/timeouts; not fatal, but update failed.
+            # Device unreachable / timeout
             raise UpdateFailed(str(exc)) from exc
         except BluetoothCtlError as exc:
             raise UpdateFailed(f"BluetoothCtl error: {exc}") from exc
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001, broad but we normalize here
             raise UpdateFailed(f"Unexpected error: {exc}") from exc
 
-        return {
-            "connected": info.connected,
-            "paired": info.paired,
-            "trusted": info.trusted,
-            "name": info.name,
-            "address": info.address,
-            "raw": info.raw,
-        }
+        # Normalize result: support both dict-like and object-like returns
+        if isinstance(info, dict):
+            return {
+                "connected": info.get("connected"),
+                "paired": info.get("paired"),
+                "trusted": info.get("trusted"),
+                "name": info.get("name"),
+                "address": info.get("address"),
+                "raw": info.get("raw"),
+            }
 
+        # Fallback: try attribute access on returned object
+        return {
+            "connected": getattr(info, "connected", None),
+            "paired": getattr(info, "paired", None),
+            "trusted": getattr(info, "trusted", None),
+            "name": getattr(info, "name", None),
+            "address": getattr(info, "address", None),
+            "raw": getattr(info, "raw", None),
+        }
