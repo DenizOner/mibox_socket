@@ -31,7 +31,6 @@ NOT_FOUND_HINTS = (
     "not found",
     "no such device",
 )
-TIMEOUT_HINTS = ("timed out", "timeout",)
 
 @dataclass
 class BtInfo:
@@ -85,15 +84,6 @@ class BluetoothCtlClient:
         # We prefer argv over shell strings to avoid shell quoting issues.
         return ["bluetoothctl", *parts]
 
-    async def run_command(cmd):
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await process.communicate()
-        return stdout.decode(), stderr.decode()
-    
     async def _run(self, *parts: str) -> str:
         """
         Run a bluetoothctl command and return stdout text.
@@ -200,6 +190,7 @@ class BluetoothCtlClient:
         out = await self._run("power", "off")
         self._classify_common_errors(out)
         return out
+
 
 
 
