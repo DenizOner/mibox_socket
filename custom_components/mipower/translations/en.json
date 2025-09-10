@@ -16,7 +16,7 @@
       "required": "This field is required.",
       "out_of_range": "Value out of allowed range.",
       "invalid_option": "Invalid option.",
-      "missing_bluetoothctl": "bluetoothctl bulunamadı. Lütfen BlueZ paketini kurun ve Home Assistant'ı yeniden başlatın.\n- Debian/Ubuntu: sudo apt install bluez\n- Docker: Host üzerinde BlueZ/DBus ve uygun izinler gerekebilir.\n" 
+      "missing_bluetoothctl": "bluetoothctl not found. Please install BlueZ and restart Home Assistant.\n- Debian/Ubuntu: sudo apt install bluez\n- Docker: Ensure host BlueZ/DBus and permissions."
     }
   },
   "options": {
@@ -44,4 +44,5 @@
     }
   }
 }
+
 
