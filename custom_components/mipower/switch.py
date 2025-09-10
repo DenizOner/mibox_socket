@@ -31,6 +31,17 @@ from .bluetoothctl import (
     BluetoothCtlNotFoundError,
     BluetoothCtlPairingRequestedError,
 )
+# Optional Bleak backend: if our new `bleak.py` exists (and bleak is installed)
+# we prefer to use it. Importing .bleak will raise only if file missing; the
+# BleakClient constructor will raise if bleak package is absent.
+try:
+    # type: ignore - optional module that we add
+    from .bleak import BleakClient  # type: ignore
+    _HAS_BLEAK_BACKEND = True
+except Exception:
+    BleakClient = None  # type: ignore
+    _HAS_BLEAK_BACKEND = False
+
 from .coordinator import MiPowerCoordinator
 from .const import (
     DOMAIN,
@@ -76,6 +87,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     sleep_cmd_type = options.get(CONF_SLEEP_COMMAND_TYPE, SLEEP_CMD_DISCONNECT)
 
     def client_factory() -> BluetoothCtlClient:
+        """Return a client instance for the configured backend.
+    
+        Preference order:
+          1. BleakClient (if our bleak.py is available and bleak library installed)
+          2. BluetoothCtlClient (fallback; uses bluetoothctl subprocess)
+        """
+        if _HAS_BLEAK_BACKEND and BleakClient is not None:
+            try:
+                return BleakClient(timeout_sec=timeout_sec)  # type: ignore
+            except BluetoothCtlError as exc:
+                # If BleakClient exists but cannot be used (e.g. bleak not installed),
+                # fallback to bluetoothctl implementation and log at debug level.
+                _LOGGER.debug("Bleak backend unavailable (%s), falling back to bluetoothctl", exc)
+        # Fallback to original bluetoothctl implementation
         return BluetoothCtlClient(timeout_sec=timeout_sec)
 
     coordinator: MiPowerCoordinator | None = None
@@ -202,7 +227,7 @@ class MiPowerSwitch(SwitchEntity):
             try:
                 return await coro_factory()
             except (BluetoothCtlTimeoutError, BluetoothCtlNotFoundError) as exc:
-                attempt += 1
+                attempt = 1
                 # Eğer deneme sayısı aşıldıysa, logla ve orijinal hatayı yukarı fırlat.
                 if attempt > self._retry_count:
                     _LOGGER.warning(
@@ -350,4 +375,5 @@ class MiPowerSwitch(SwitchEntity):
 
     async def async_service_sleep(self) -> None:
         await self.async_turn_off()
+
 
