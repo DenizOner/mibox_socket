@@ -320,23 +320,29 @@ class MiPowerSwitch(SwitchEntity):
             return False
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        """Entity-level turn_on: runs wake sequence and update HA state."""
         self._attr_available = True
         ok = await self._wake_sequence()
         if ok:
             self._is_on_cached = True
+            # Durum değişti — hemen HA'ya yaz.
+            self.async_write_ha_state()
         else:
-            # Reflect problem
+            # Problem var: entity artık kullanılamıyor gibi göster.
             self._attr_available = False
-        self.async_write_ha_state()
-
+            self.async_write_ha_state()
+    
     async def async_turn_off(self, **kwargs: Any) -> None:
+        """Entity-level turn_off: runs sleep sequence and update HA state."""
         self._attr_available = True
         ok = await self._sleep_sequence()
         if ok:
             self._is_on_cached = False
+            # Durum değişti — hemen HA'ya yaz.
+            self.async_write_ha_state()
         else:
             self._attr_available = False
-        self.async_write_ha_state()
+            self.async_write_ha_state()
 
     # Entity-bound services (no parameters)
     async def async_service_wake(self) -> None:
@@ -344,3 +350,4 @@ class MiPowerSwitch(SwitchEntity):
 
     async def async_service_sleep(self) -> None:
         await self.async_turn_off()
+
