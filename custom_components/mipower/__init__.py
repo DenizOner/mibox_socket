@@ -36,13 +36,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Persistent Notification with TR/EN hint
         hass.components.persistent_notification.create(
             title="MiPower",
-            message=(
-                "bluetoothctl bulunamadı. Lütfen BlueZ paketini kurun ve Home Assistant'ı yeniden başlatın.\n"
-                "- Debian/Ubuntu: sudo apt install bluez\n"
-                "- Docker: Host üzerinde BlueZ/DBus ve uygun izinler gerekebilir.\n\n"
-                "bluetoothctl not found. Please install BlueZ and restart Home Assistant.\n"
-                "- Debian/Ubuntu: sudo apt install bluez\n"
-                "- Docker: Ensure host BlueZ/DBus and permissions."
+            message=hass.helpers.translation.async_get_localized_string(
+                f"{DOMAIN}.error.missing_bluetoothctl"
             ),
             notification_id=f"{DOMAIN}_missing_bluetoothctl",
         )
@@ -69,6 +64,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload MiPower config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     return unload_ok
+
 
 
 
