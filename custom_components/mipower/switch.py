@@ -191,8 +191,11 @@ class MiPowerSwitch(SwitchEntity):
             self.async_write_ha_state()
 
     async def _retrying(self, coro_factory: Callable[[], Coroutine[Any, Any, Any]]) -> Any:
-        """
-        Retry helper with simple fixed delay policy.
+        """Retry helper with a simple fixed delay policy.
+    
+        - Deneme sayısı `self._retry_count` kadar izin verir (0 = hiç retry).
+        - Timeout/NotFound durumlarında otomatik tekrar dener.
+        - Eğer deneme hakkı biterse orijinal istisnayı yeniden yükseltir.
         """
         attempt = 0
         while True:
@@ -200,9 +203,24 @@ class MiPowerSwitch(SwitchEntity):
                 return await coro_factory()
             except (BluetoothCtlTimeoutError, BluetoothCtlNotFoundError) as exc:
                 attempt += 1
+                # Eğer deneme sayısı aşıldıysa, logla ve orijinal hatayı yukarı fırlat.
                 if attempt > self._retry_count:
+                    _LOGGER.warning(
+                        "Operation failed for %s after %s attempts: %s",
+                        self._mac,
+                        attempt,
+                        exc,
+                    )
+                    # Orijinal exception'ı yeniden yükselt (böylece üst katman uygun şekilde ele alır)
                     raise
-                _LOGGER.warning("Operation failed (%s). Retrying %s/%s in %.1fs", exc, attempt, self._retry_count, self._retry_delay_sec)
+                # Aksi halde tekrar dene: bilgi amaçlı log ve kısa bekleme
+                _LOGGER.debug(
+                    "Operation failed (%s). Retrying %s/%s in %.1fs",
+                    exc,
+                    attempt,
+                    self._retry_count,
+                    self._retry_delay_sec,
+                )
                 await asyncio.sleep(self._retry_delay_sec)
 
     async def _do_info(self) -> dict[str, Any]:
@@ -326,14 +344,3 @@ class MiPowerSwitch(SwitchEntity):
 
     async def async_service_sleep(self) -> None:
         await self.async_turn_off()
-
-
-
-
-
-
-
-
-
-
-
