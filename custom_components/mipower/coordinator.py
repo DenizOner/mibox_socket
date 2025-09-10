@@ -9,7 +9,10 @@ from datetime import timedelta
 from typing import Any, Callable
 
 from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.exceptions import UpdateFailed
 
 from .bluetoothctl import (
     BluetoothCtlClient,
@@ -37,7 +40,7 @@ class MiPowerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         "raw": str,
     }
     """
-
+    
     def __init__(
         self,
         hass: HomeAssistant,
@@ -54,6 +57,22 @@ class MiPowerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._mac = mac
         self._client_factory = client_factory
 
+    async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+        coordinator = MiPowerCoordinator(hass, entry)
+        hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    
+        # İlk yüklemede coordinator veri çekmeye çalışır. Eğer cihaz ulaşılmazsa
+        # ConfigEntryNotReady fırlatılarak HA'nın daha sonra yeniden denemesi sağlanır.
+        try:
+            await coordinator.async_config_entry_first_refresh()
+        except UpdateFailed as exc:
+            # Genellikle bağlantı/zaman aşımı kaynaklı olabilir
+            raise ConfigEntryNotReady(
+                f"Initial data fetch failed for {entry.entry_id}: {exc}"
+            ) from exc
+    
+        # platform yüklemeleri burada devam eder...
+    
     async def _async_update_data(self) -> dict[str, Any]:
         client = self._client_factory()
         try:
@@ -77,3 +96,4 @@ class MiPowerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "address": info.address,
             "raw": info.raw,
         }
+
