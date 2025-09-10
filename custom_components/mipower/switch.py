@@ -35,6 +35,7 @@ from .bluetoothctl import (
 from .coordinator import MiPowerCoordinator
 from .const import (
     DOMAIN,
+    DEFAULT_ENTITY_ICON,
     CONF_MAC,
     CONF_MEDIA_PLAYER_ENTITY_ID,
     CONF_TIMEOUT_SEC,
@@ -103,7 +104,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 class MiPowerSwitch(SwitchEntity):
     _attr_has_entity_name = False
-    _attr_icon = "mdi:power"  # switch icon
+    _attr_icon = DEFAULT_ENTITY_ICON  # switch icon
 
     def __init__(
         self,
@@ -341,6 +342,7 @@ async def async_added_to_hass(self) -> None:
 
     async def async_service_sleep(self) -> None:
         await self.async_turn_off()
+
 
 
 
