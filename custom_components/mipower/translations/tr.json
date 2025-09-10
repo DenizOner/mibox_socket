@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "MiPower",
-        "description": "Cihazınızın Bluetooth MAC adresini girin.\nİpucu: Muhtemelen E0:B6:55:**:**:** ile başlar",
+        "description": "Cihazınızın Bluetooth MAC adresini girin. İpucu: Muhtemelen E0:B6:55:**:**:** ile başlar",
         "data": {
           "name": "Cihaz adı",
           "mac": "Bluetooth MAC adresi (AA:BB:CC:DD:EE:FF)"
@@ -19,7 +19,7 @@
       "required": "Bu alan zorunludur.",
       "out_of_range": "Değer izin verilen aralığın dışında.",
       "invalid_option": "Geçersiz seçenek.",
-      "missing_bluetoothctl": "bluetoothctl bulunamadı. Lütfen BlueZ paketini kurun ve Home Assistant'ı yeniden başlatın.\n- Debian/Ubuntu: sudo apt install bluez\n- Docker: Host üzerinde BlueZ/DBus ve uygun izinler gerekebilir.\n"
+      "missing_bluetoothctl": "bluetoothctl bulunamadı. Lütfen BlueZ paketini kurun ve Home Assistant'ı yeniden başlatın. Örnek: Debian/Ubuntu: sudo apt install bluez. Docker kullanıyorsanız host üzerinde BlueZ/DBus ve uygun izinler gerekebilir."
     }
   },
   "options": {
@@ -41,7 +41,7 @@
         "data": {
           "polling_interval_sec": "Polling aralığı (saniye)",
           "media_player_entity_id": "Media Player (polling kapalıyken kullanılır)",
-          "sleep_command_type": "Uyku komutu (disconnect veya power off)"
+          "sleep_command_type": "Uyku komutu (disconnect veya power_off)"
         }
       }
     }
@@ -68,7 +68,7 @@
         "step": {
           "user": {
             "title": "MiPower Kurulumu",
-            "description": "Cihazı eklemek için MAC adresini girin.\nTam yönlendirme...\n(Türkçe metni tam haliyle koru)",
+            "description": "Cihazı eklemek için MAC adresini girin.",
             "data": {
               "mac": "Cihaz MAC adresi"
             }
@@ -83,7 +83,7 @@
         }
       },
       "notification": {
-        "missing_bluetoothctl": "bluetoothctl bulunamadı. Lütfen BlueZ paketini kurun ve Home Assistant'ı yeniden başlatın.\n- Debian/Ubuntu: sudo apt install bluez\n- Docker: Host üzerinde BlueZ/DBus ve uygun izinler gerekli.\nDetaylı açıklama...\n(Türkçe metninin tamamını, satır sonlarıyla, olduğu gibi koy)"
+        "missing_bluetoothctl": "bluetoothctl bulunamadı. Lütfen BlueZ paketini kurun ve Home Assistant'ı yeniden başlatın. Debian/Ubuntu: sudo apt install bluez. Docker: Host üzerinde BlueZ/DBus ve uygun izinler gerekli."
       }
     }
   }
