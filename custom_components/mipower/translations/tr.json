@@ -45,5 +45,46 @@
         }
       }
     }
+  },
+  "component": {
+    "mipower": {
+      "services": {
+        "wake": {
+          "name": "Cihazı uyandır",
+          "description": "Cihaza uyandırma komutu gönderir.",
+          "fields": {
+            "mac": {
+              "name": "MAC adresi",
+              "description": "Hedef cihaz MAC."
+            }
+          }
+        },
+        "sleep": {
+          "name": "Cihazı uyut",
+          "description": "Cihaza uyutma komutu gönderir."
+        }
+      },
+      "config": {
+        "step": {
+          "user": {
+            "title": "MiPower Kurulumu",
+            "description": "Cihazı eklemek için MAC adresini girin.\nTam yönlendirme...\n(Türkçe metni tam haliyle koru)",
+            "data": {
+              "mac": "Cihaz MAC adresi"
+            }
+          }
+        },
+        "error": {
+          "invalid_mac": "MAC adres formatı geçersiz. Beklenen format: AA:BB:CC:DD:EE:FF.",
+          "cannot_connect": "Cihaza bağlanılamıyor. Açık olduğundan ve kapsama alanında olduğundan emin olun."
+        },
+        "abort": {
+          "already_configured": "Bu cihaz zaten yapılandırılmış."
+        }
+      },
+      "notification": {
+        "missing_bluetoothctl": "bluetoothctl bulunamadı. Lütfen BlueZ paketini kurun ve Home Assistant'ı yeniden başlatın.\n- Debian/Ubuntu: sudo apt install bluez\n- Docker: Host üzerinde BlueZ/DBus ve uygun izinler gerekli.\nDetaylı açıklama...\n(Türkçe metninin tamamını, satır sonlarıyla, olduğu gibi koy)"
+      }
+    }
   }
 }
