@@ -2,8 +2,8 @@
   "domain": "mipower",
   "name": "MiPower",
   "version": "0.1.1",
-  "documentation": "https://github.com/DenizOner/mipower",
-  "issue_tracker": "https://github.com/DenizOner/mipower/issues",
+  "documentation": "https://github.com/DenizOner/MiPower",
+  "issue_tracker": "https://github.com/DenizOner/MiPower/issues",
   "codeowners": ["@frlequ, @ChatGPT, @DenizOner"],
   "iot_class": "local_push",
   "icon": "mdi:power-settings",
@@ -16,6 +16,7 @@
   "quality_scale": "silver",
   "min_homeassistant_version": "2024.8.0"
 }
+
 
 
 
