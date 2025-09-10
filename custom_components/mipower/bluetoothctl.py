@@ -85,6 +85,15 @@ class BluetoothCtlClient:
         # We prefer argv over shell strings to avoid shell quoting issues.
         return ["bluetoothctl", *parts]
 
+    async def run_command(cmd):
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        return stdout.decode(), stderr.decode()
+    
     async def _run(self, *parts: str) -> str:
         """
         Run a bluetoothctl command and return stdout text.
