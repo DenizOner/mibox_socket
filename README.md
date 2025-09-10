@@ -3,8 +3,8 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.8%2B-41BDF5)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
-[![Release](https://img.shields.io/github/v/release/your-org-or-user/mipower?display_name=tag)](https://github.com/your-org-or-user/mipower/releases)
-[![Downloads](https://img.shields.io/github/downloads/your-org-or-user/mipower/total.svg)](https://github.com/your-org-or-user/mipower/releases)
+[![Release](https://img.shields.io/github/v/release/DenizOner/mipower?display_name=tag)](https://github.com/DenizOner/mipower/releases)
+[![Downloads](https://img.shields.io/github/downloads/DenizOner/mipower/total.svg)](https://github.com/DenizOner/mipower/releases)
 
 MiPower is a Home Assistant custom integration that wakes and sleeps Mi Box S–like devices via `bluetoothctl` **without showing pairing popups**.  
 It is fully asynchronous, uses non‑interactive commands, and follows a **"abort if pairing is requested"** safety rule.
@@ -232,3 +232,4 @@ MIT — see LICENSE file.
 ## Changelog
 
 - **0.1.0**: Initial release — async bluetoothctl, pairing‑free wake, optional polling, media_player fallback, wake/sleep services, advanced settings.
+
