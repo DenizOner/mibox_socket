@@ -9,6 +9,12 @@ from typing import Final
 
 DOMAIN: Final = "mipower"
 
+# Entegrasyon (Integrations/HACS kartları) ikonu
+INTEGRATION_ICON: Final = "mdi:power-settings"
+
+# Varlık (switch) ikonu
+DEFAULT_ENTITY_ICON: Final = "mdi:power"
+
 # Defaults (can be overridden via Options Flow)
 DEFAULT_TIMEOUT_SEC: Final[float] = 12.0
 DEFAULT_RETRY_COUNT: Final[int] = 1
@@ -49,7 +55,7 @@ SLEEP_CMD_DISCONNECT: Final = "disconnect"
 SLEEP_CMD_POWER_OFF: Final = "power_off"
 
 # Entity
-DEFAULT_ICON: Final = "mdi:power"
+DEFAULT_ICON: Final = INTEGRATION_ICON
 
 # MAC regex (AA:BB:CC:DD:EE:FF) - case-insensitive
 MAC_REGEX: Final = re.compile(r"^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$")
@@ -61,4 +67,5 @@ def normalize_mac(mac: str) -> str:
 # Helper: validate MAC format
 def is_valid_mac(mac: str) -> bool:
     return MAC_REGEX.match(mac.strip()) is not None
+
 
