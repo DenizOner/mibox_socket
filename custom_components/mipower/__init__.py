@@ -13,8 +13,8 @@ import shutil
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
+from homeassistant.components import persistent_notification
 
 from .const import DOMAIN
 
@@ -31,19 +31,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     If missing, we reject the setup and show a persistent notification with guidance.
     """
     _LOGGER.debug("Setting up MiPower integration")
+    
     if shutil.which("bluetoothctl") is None:
-        _LOGGER.critical("bluetoothctl not found on system PATH. Cannot set up MiPower.")
-        # Persistent Notification with TR/EN hint
-        hass.components.persistent_notification.create(
-            message=hass.helpers.translation.async_get_localized_string(
-                "component.mipower.notification.missing_bluetoothctl"
-            ),
-            title="MiPower",
-            notification_id="mipower_bluetoothctl_missing",
-        )
-        # Reject setup
-        return False
-
+    _LOGGER.critical(
+        "bluetoothctl not found on system PATH. Cannot set up MiPower."
+    )
+    message = (
+        "bluetoothctl bulunamadı / bluetoothctl not found on PATH.\n\n"
+        "Lütfen sisteminizde BlueZ (bluetoothctl) kurulu olduğundan emin olun.\n"
+        "Please ensure BlueZ (bluetoothctl) is installed on the host."
+    )
+    persistent_notification.create(
+        hass,
+        message=message,
+        title="MiPower",
+        notification_id="mipower_bluetoothctl_missing",
+    )
+    return False
+    
     mac = entry.data.get("mac", "UNKNOWN")
     device_registry = dr.async_get(hass)
     device_registry.async_get_or_create(
@@ -64,6 +69,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload MiPower config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     return unload_ok
+
 
 
 
