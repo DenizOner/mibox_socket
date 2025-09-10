@@ -3,8 +3,8 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 ![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.8%2B-41BDF5)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
-[![Release](https://img.shields.io/github/v/release/DenizOner/mipower?display_name=tag)](https://github.com/DenizOner/mipower/releases)
-[![Downloads](https://img.shields.io/github/downloads/DenizOner/mipower/total.svg)](https://github.com/DenizOner/mipower/releases)
+[![Release](https://img.shields.io/github/v/release/DenizOner/MiPower?display_name=tag)](https://github.com/DenizOner/MiPower/releases)
+[![Downloads](https://img.shields.io/github/downloads/DenizOner/MiPower/total.svg)](https://github.com/DenizOner/MiPower/releases)
 
 MiPower is a Home Assistant custom integration that wakes and sleeps Mi Box S–like devices via `bluetoothctl` **without showing pairing popups**.  
 It is fully asynchronous, uses non‑interactive commands, and follows a **"abort if pairing is requested"** safety rule.
@@ -49,7 +49,7 @@ It is fully asynchronous, uses non‑interactive commands, and follows a **"abor
 
 #### A) As a Custom Repository (immediate use)
 1. Go to **HACS > Integrations >** three‑dot menu > **Custom repositories**
-2. Repository URL: `https://github.com/DenizOner/mipower`
+2. Repository URL: `https://github.com/DenizOner/MiPower`
 3. Category: **Integration**
 4. Click **Add**, then install MiPower from HACS
 5. Restart Home Assistant
@@ -242,4 +242,5 @@ MIT — see LICENSE file.
   - `bluetoothctl` (BlueZ) fallback — requires `bluetoothctl` (BlueZ) installed on the host.
 
 If using the BlueZ fallback, ensure the host has `bluetoothctl` (BlueZ) installed and the Home Assistant process has permission to access the bluetooth adapter.
+
 
