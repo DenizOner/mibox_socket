@@ -248,7 +248,12 @@ async def async_added_to_hass(self) -> None:
             try:
                 await self._retrying(lambda: client.connect(self._mac))
             except BluetoothCtlPairingRequestedError:
-                _LOGGER.warning("Pairing requested by device/controller; aborting wake for %s", self._mac)
+                _LOGGER.warning(
+                    hass.helpers.translation.async_get_localized_string(
+                        f"{DOMAIN}.warning.pairing_requested"
+                    ),
+                    self._mac
+                )
                 return False
 
             # Allow device to process the wake signal
@@ -336,6 +341,7 @@ async def async_added_to_hass(self) -> None:
 
     async def async_service_sleep(self) -> None:
         await self.async_turn_off()
+
 
 
 
