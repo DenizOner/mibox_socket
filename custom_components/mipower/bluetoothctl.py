@@ -8,9 +8,9 @@ are detected, operations are aborted with a specific error.
 
 from __future__ import annotations
 
-import contextlib
 import asyncio
 import logging
+import contextlib
 import shlex
 from dataclasses import dataclass
 from typing import Optional
@@ -197,4 +197,5 @@ class BluetoothCtlClient:
         out = await self._run("power", "off")
         self._classify_common_errors(out)
         return out
+
 
