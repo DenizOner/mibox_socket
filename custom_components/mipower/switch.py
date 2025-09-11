@@ -1,10 +1,8 @@
 """MiPower switch platform.
 
 - SwitchEntity kullanır (UI'de tek bir toggle görünür).
-- bluetoothctl (BlueZ CLI) öncelikli backend olarak seçildi — daha güvenilir
-  Linux hostlarda; Bleak fallback olarak kullanılacak.
-- Opsiyonel polling için DataUpdateCoordinator ile entegre çalışır.
-- Cihaz kapalıyken entity 'unavailable' olmayacak; kullanıcı yine açma komutu verebilecek.
+- bluetoothctl (BlueZ CLI) öncelikli backend olarak seçildi.
+- Cihaz kapalıyken entity 'available' True kalır; is_on False döner (UI 'off' görünsün).
 - Hatalar `extra_state_attributes["last_error"]` içinde gösterilir.
 """
 from __future__ import annotations
@@ -63,13 +61,7 @@ SERVICE_SLEEP = "sleep_device"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
-    """Set up MiPower switch platform from a config entry.
-
-    - Read MAC and options
-    - Prepare a client_factory (bluetoothctl preferred, bleak fallback)
-    - Optionally start a coordinator for polling
-    - Create MiPowerSwitch entity and add to hass
-    """
+    """Set up MiPower switch platform from a config entry."""
     mac = entry.data[CONF_MAC]
 
     options = entry.options or {}
@@ -86,21 +78,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     media_player_entity_id = options.get(CONF_MEDIA_PLAYER_ENTITY_ID)
     sleep_cmd_type = options.get(CONF_SLEEP_COMMAND_TYPE, SLEEP_CMD_DISCONNECT)
 
-    # client_factory burada tanımlanır; import-time blocking oluşturulmaması için.
     def client_factory() -> BluetoothCtlClient:
-        """Return preferred client.
-
-        Quick-fix: prefer bluetoothctl (BlueZ CLI) which is often more reliable
-        for simple connect/disconnect sequences on Linux hosts. If you later
-        want to prefer Bleak again, revert this.
-        """
-        # 1) Try bluetoothctl subprocess-based client first (preferred)
+        """Return preferred client (bluetoothctl first, bleak fallback)."""
         try:
             return BluetoothCtlClient(timeout_sec=timeout_sec)
         except Exception as exc:
             _LOGGER.debug("bluetoothctl client not usable: %s — will try Bleak", exc)
 
-        # 2) Try Bleak as fallback (if bleak.py + bleak package present)
         try:
             from .bleak import BleakClient  # type: ignore
         except Exception:
@@ -112,7 +96,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             except BluetoothCtlError as exc:
                 _LOGGER.debug("Bleak backend present but unusable: %s", exc)
 
-        # 3) No usable backend found -> raise so setup can fail loudly
         raise BluetoothCtlError("No usable bluetooth backend (bluetoothctl nor bleak)")
 
     coordinator: Optional[MiPowerCoordinator] = None
@@ -120,7 +103,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         coordinator = MiPowerCoordinator(
             hass, mac=mac, client_factory=client_factory, interval_sec=polling_interval_sec
         )
-        # İlk veri çekimini bekle; başarısızsa ConfigEntryNotReady/UpdateFailed tetiklenir.
         await coordinator.async_config_entry_first_refresh()
 
     switch = MiPowerSwitch(
@@ -162,7 +144,6 @@ class MiPowerSwitch(SwitchEntity):
         sleep_cmd_type: str,
         coordinator: Optional[MiPowerCoordinator] = None,
     ) -> None:
-        # Temel alanlar
         self.hass = hass
         self._entry_id = entry_id
         self._mac = mac
@@ -175,22 +156,18 @@ class MiPowerSwitch(SwitchEntity):
         self._sleep_cmd_type = sleep_cmd_type
         self._coordinator = coordinator
 
-        # unique_id: sadece bir kez mac kullanılarak oluşturulur (alt çizgi ile)
         sanitized_mac = str(self._mac).lower().replace(":", "_")
         self._attr_unique_id = f"{DOMAIN}_{sanitized_mac}"
 
-        # Görünen isim: kullanıcı verdi mi, yoksa mantıklı fallback mi?
         given_name: str = entry.data.get(CONF_NAME, f"MiPower {sanitized_mac}")
         self._given_name = given_name
         self._attr_name = given_name
 
-        # Availability / state
-        # Önemli: Cihaz kapalıysa bile kullanıcı açabilsin diye available'ı kapatmıyoruz.
+        # Important: start with False so UI shows 'off' instead of 'unknown'
         self._attr_available = True
-        self._is_on_cached: Optional[bool] = None
+        self._is_on_cached: Optional[bool] = False
         self._unsub_media_listener = None
 
-        # Son hata mesajı, extra_state_attributes içinde gösterilecektir.
         self._last_error: Optional[str] = None
 
     @property
@@ -203,30 +180,33 @@ class MiPowerSwitch(SwitchEntity):
         )
 
     @property
-    def is_on(self) -> Optional[bool]:
+    def is_on(self) -> bool:
         """Return True if device considered on.
 
         Priority:
          1) Coordinator (polling) data if enabled
          2) Media player mapping if polling disabled and media player set
-         3) Cached value
+         3) Cached value (default False)
         """
-        if self._polling_enabled and self._coordinator and self._coordinator.data is not None:
-            conn = self._coordinator.data.get("connected")
-            return bool(conn) if conn is not None else self._is_on_cached
+        if self._polling_enabled and self._coordinator:
+            # Only trust coordinator if it has data
+            if self._coordinator.data is not None:
+                conn = self._coordinator.data.get("connected")
+                return bool(conn) if conn is not None else False
+            return False
 
         if self._media_player_entity_id:
             st = self.hass.states.get(self._media_player_entity_id)
             if st:
                 return self._map_media_state_to_on(st.state)
 
-        return self._is_on_cached
+        # Default to False (not on) if unknown
+        return bool(self._is_on_cached)
 
     def _map_media_state_to_on(self, state: StateType) -> bool:
         return str(state) in (STATE_ON, STATE_PLAYING, STATE_IDLE)
 
     async def async_added_to_hass(self) -> None:
-        """If polling disabled and media_player configured, subscribe to its state."""
         if not self._polling_enabled and self._media_player_entity_id:
             st = self.hass.states.get(self._media_player_entity_id)
             if st:
@@ -252,7 +232,6 @@ class MiPowerSwitch(SwitchEntity):
             self.async_write_ha_state()
 
     async def _retrying(self, coro_factory: Callable[[], Coroutine[Any, Any, Any]]) -> Any:
-        """Retry helper: retry on certain transient errors."""
         attempt = 0
         while True:
             try:
@@ -277,7 +256,6 @@ class MiPowerSwitch(SwitchEntity):
                 await asyncio.sleep(self._retry_delay_sec)
 
     async def _do_info(self) -> Dict[str, Any]:
-        """Call client.info and normalize result to a dict."""
         client = self._client_factory()
         info = await client.info(self._mac)
 
@@ -306,18 +284,10 @@ class MiPowerSwitch(SwitchEntity):
         if self._last_error:
             attrs["last_error"] = self._last_error
         if self._coordinator is not None:
-            # coordinator.last_update_success exists on DataUpdateCoordinator
             attrs["coordinator_last_update_success"] = getattr(self._coordinator, "last_update_success", None)
         return attrs
 
     async def _wake_sequence(self) -> bool:
-        """Wake sequence:
-        - if already connected -> success
-        - try connect (primary backend, fallback to bluetoothctl if primary fails)
-        - wait disconnect_delay
-        - disconnect (best-effort)
-        - verify via info()
-        """
         try:
             info_before = await self._retrying(lambda: self._do_info())
             if info_before.get("connected") is True:
@@ -326,11 +296,10 @@ class MiPowerSwitch(SwitchEntity):
 
             client = self._client_factory()
 
-            # Try connecting with primary backend; on generic backend error try bluetoothctl fallback.
             try:
                 await self._retrying(lambda: client.connect(self._mac))
             except BluetoothCtlPairingRequestedError:
-                _LOGGER.warning("Pairing requested by device/controller; aborting wake for %s", self._mac)
+                _LOGGER.warning("Pairing requested; aborting wake for %s", self._mac)
                 return False
             except BluetoothCtlError as exc:
                 _LOGGER.warning("Primary backend connect failed for %s: %s. Trying bluetoothctl fallback.", self._mac, exc)
@@ -345,20 +314,16 @@ class MiPowerSwitch(SwitchEntity):
                     _LOGGER.error("Fallback bluetoothctl connect also failed for %s: %s", self._mac, exc2)
                     return False
 
-            # Let device process wake
             await asyncio.sleep(self._disconnect_delay_sec)
 
-            # Best-effort disconnect
             try:
                 await self._retrying(lambda: client.disconnect(self._mac))
             except BluetoothCtlError:
                 _LOGGER.debug("Disconnect after wake failed; continuing (best-effort).")
 
-            # Verify
             info_after = await self._retrying(lambda: self._do_info())
-            connected = info_after.get("connected")
-            # Many devices don't remain connected after wake; treat as success unless pairing/fatal error occurred.
-            return True if connected is True or connected is False else True
+            _ = info_after.get("connected")
+            return True
 
         except BluetoothCtlPairingRequestedError:
             _LOGGER.warning("Pairing requested; abort wake for %s", self._mac)
@@ -374,7 +339,6 @@ class MiPowerSwitch(SwitchEntity):
             return False
 
     async def _sleep_sequence(self) -> bool:
-        """Sleep sequence: disconnect or power_off depending on config."""
         client = self._client_factory()
         try:
             if self._sleep_cmd_type == SLEEP_CMD_POWER_OFF:
@@ -401,7 +365,6 @@ class MiPowerSwitch(SwitchEntity):
             return False
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """User requested turn_on (wake). Keep entity available even on failure; record error."""
         try:
             ok = await self._wake_sequence()
             if ok:
@@ -413,11 +376,9 @@ class MiPowerSwitch(SwitchEntity):
             _LOGGER.exception("Error during async_turn_on for %s", self._mac)
             self._last_error = f"Exception during wake: {exc}"
         finally:
-            # Keep entity visible/usable; reflect any state/attribute changes.
             self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """User requested turn_off (sleep). Keep entity available even on failure; record error."""
         try:
             ok = await self._sleep_sequence()
             if ok:
@@ -431,7 +392,6 @@ class MiPowerSwitch(SwitchEntity):
         finally:
             self.async_write_ha_state()
 
-    # Convenience: expose entity-level services (if you later register them)
     async def async_service_wake(self) -> None:
         await self.async_turn_on()
 
