@@ -1,7 +1,8 @@
 """MiPower switch platform.
 
 - SwitchEntity kullanır (UI'de tek bir toggle görünür).
-- BLE backend (bleak) tercih edilir, yoksa bluetoothctl fallback.
+- bluetoothctl (BlueZ CLI) öncelikli backend olarak seçildi — daha güvenilir
+  Linux hostlarda; Bleak fallback olarak kullanılacak.
 - Opsiyonel polling için DataUpdateCoordinator ile entegre çalışır.
 - Cihaz kapalıyken entity 'unavailable' olmayacak; kullanıcı yine açma komutu verebilecek.
 - Hatalar `extra_state_attributes["last_error"]` içinde gösterilir.
@@ -65,7 +66,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     """Set up MiPower switch platform from a config entry.
 
     - Read MAC and options
-    - Prepare a client_factory (prefers Bleak if present)
+    - Prepare a client_factory (bluetoothctl preferred, bleak fallback)
     - Optionally start a coordinator for polling
     - Create MiPowerSwitch entity and add to hass
     """
@@ -87,7 +88,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
     # client_factory burada tanımlanır; import-time blocking oluşturulmaması için.
     def client_factory() -> BluetoothCtlClient:
-        """Return preferred client: BleakClient if available, else BluetoothCtlClient."""
+        """Return preferred client.
+
+        Quick-fix: prefer bluetoothctl (BlueZ CLI) which is often more reliable
+        for simple connect/disconnect sequences on Linux hosts. If you later
+        want to prefer Bleak again, revert this.
+        """
+        # 1) Try bluetoothctl subprocess-based client first (preferred)
+        try:
+            return BluetoothCtlClient(timeout_sec=timeout_sec)
+        except Exception as exc:
+            _LOGGER.debug("bluetoothctl client not usable: %s — will try Bleak", exc)
+
+        # 2) Try Bleak as fallback (if bleak.py + bleak package present)
         try:
             from .bleak import BleakClient  # type: ignore
         except Exception:
@@ -96,10 +109,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         if BleakClient is not None:
             try:
                 return BleakClient(timeout_sec=timeout_sec)  # type: ignore
-            except BluetoothCtlError:
-                _LOGGER.debug("Bleak backend present but unusable; falling back to bluetoothctl")
+            except BluetoothCtlError as exc:
+                _LOGGER.debug("Bleak backend present but unusable: %s", exc)
 
-        return BluetoothCtlClient(timeout_sec=timeout_sec)
+        # 3) No usable backend found -> raise so setup can fail loudly
+        raise BluetoothCtlError("No usable bluetooth backend (bluetoothctl nor bleak)")
 
     coordinator: Optional[MiPowerCoordinator] = None
     if polling_enabled:
