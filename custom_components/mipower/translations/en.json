@@ -5,6 +5,10 @@
       "user": {
         "title": "Configure MiPower",
         "description": "Enter device MAC address and options. Choose backend: bluetoothctl (default) or bleak."
+      },
+      "pick_backend": {
+        "title": "Choose backend",
+        "description": "Select communication backend. bluetoothctl uses host BlueZ; bleak uses Python BLE libraries."
       }
     }
   },
@@ -17,6 +21,17 @@
     "backend_label": "Backend",
     "backend_description": "Choose communication backend (bluetoothctl or bleak).",
     "mac_label": "MAC Address",
-    "name_label": "Display name"
+    "name_label": "Display name",
+    "timeout_label": "Timeout (seconds)",
+    "retry_count_label": "Retry attempts",
+    "retry_delay_label": "Retry delay (seconds)"
+  },
+  "error": {
+    "invalid_mac": "Invalid MAC address.",
+    "backend_not_available": "Selected backend not available on host or missing Python package."
+  },
+  "diagnostics": {
+    "title": "MiPower diagnostics",
+    "description": "Runtime diagnostic information for MiPower integration."
   }
 }
