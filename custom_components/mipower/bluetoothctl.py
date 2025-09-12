@@ -1,196 +1,132 @@
-"""
-Async bluetoothctl client wrapper for MiPower.
+"""Bluetoothctl (BlueZ) asynchronous helper.
 
-Non-interactive, one-shot commands via asyncio subprocess.
-No pairing commands are issued by this client. If pairing-like prompts
-are detected, operations are aborted with a specific error.
+This module provides a small async wrapper around the bluetoothctl binary,
+using asyncio.create_subprocess_exec so we do not block the Home Assistant event loop.
+
+It provides a minimal "client" API with:
+- async info(address) -> dict
+- async connect(address) -> None
+- async disconnect(address) -> None
+- async scan(seconds) -> list of (address,name)
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import contextlib
-import shlex
-from dataclasses import dataclass
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 
 _LOGGER = logging.getLogger(__name__)
 
-# Heuristic strings to classify output results
-PAIRING_HINTS = (
-    "pair",  # generic
-    "authentication",  # org.bluez.Error.Authentication*
-    "passkey",
-    "pincode",
-    "confirm",
-    "authorize",
-)
-NOT_FOUND_HINTS = (
-    "not available",
-    "not found",
-    "no such device",
-)
-
-@dataclass
-class BtInfo:
-    connected: Optional[bool] = None
-    paired: Optional[bool] = None
-    trusted: Optional[bool] = None
-    address: Optional[str] = None
-    name: Optional[str] = None
-    raw: str = ""
-
-
 class BluetoothCtlError(Exception):
-    """Base class for bluetoothctl-related errors."""
+    """Generic bluetoothctl wrapper error."""
 
 
-class BluetoothCtlTimeoutError(BluetoothCtlError):
-    """Command timeout."""
+async def _run_cmd(*args: str, timeout: float = 10.0) -> Tuple[int, str, str]:
+    """Run a command and return (returncode, stdout, stderr)."""
+    proc = await asyncio.create_subprocess_exec(
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        proc.kill()
+        raise BluetoothCtlError(f"Command {' '.join(args)} timed out")
+    return proc.returncode, (stdout.decode("utf-8", errors="ignore") if stdout else ""), (stderr.decode("utf-8", errors="ignore") if stderr else "")
 
 
-class BluetoothCtlPairingRequestedError(BluetoothCtlError):
-    """Pairing requested/required detected; we deliberately abort."""
+async def info(address: str, timeout: float = 6.0) -> Dict[str, Optional[str]]:
+    """Return parsed output of `bluetoothctl info <address>`.
 
-
-class BluetoothCtlNotFoundError(BluetoothCtlError):
-    """Device not found or controller/device unavailable."""
-
-
-class BluetoothCtlEnvError(BluetoothCtlError):
-    """Environment or execution error (bluetoothctl missing/failed)."""
-
-
-class BluetoothCtlParseError(BluetoothCtlError):
-    """Parsing failed or unexpected output."""
-
-
-class BluetoothCtlClient:
+    Example output lines parsed:
+      Name: Mi Box S
+      Alias: Mi Box S
+      Paired: yes
+      Trusted: yes
+      Connected: no
     """
-    One-shot async bluetoothctl wrapper.
+    try:
+        rc, out, err = await _run_cmd("bluetoothctl", "info", address, timeout=timeout)
+    except BluetoothCtlError as exc:
+        _LOGGER.debug("bluetoothctl info failed: %s", exc)
+        raise
 
-    Design:
-    - Each command spawns a subprocess: bluetoothctl <subcommand...>
-    - Output is captured and analyzed.
-    - Timeout is enforced via asyncio.wait_for.
-    - No stateful interactive session; minimal side-effects.
+    data: Dict[str, Optional[str]] = {
+        "address": address,
+        "raw": out,
+        "name": None,
+        "paired": None,
+        "trusted": None,
+        "connected": None,
+    }
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("Name:"):
+            data["name"] = line.partition("Name:")[2].strip()
+        elif line.startswith("Paired:"):
+            data["paired"] = line.partition("Paired:")[2].strip()
+        elif line.startswith("Trusted:"):
+            data["trusted"] = line.partition("Trusted:")[2].strip()
+        elif line.startswith("Connected:"):
+            data["connected"] = line.partition("Connected:")[2].strip().lower()
+    return data
+
+
+async def connect(address: str, timeout: float = 8.0) -> None:
+    """Attempt to connect via bluetoothctl connect <address>.
+
+    We purposely do NOT run `pair` to avoid triggering pairing UI on the device.
     """
+    try:
+        rc, out, err = await _run_cmd("bluetoothctl", "connect", address, timeout=timeout)
+        if rc != 0:
+            _LOGGER.debug("bluetoothctl connect returned rc=%s out=%s err=%s", rc, out, err)
+            raise BluetoothCtlError(f"connect failed ({rc})")
+        # Note: bluetoothctl may still succeed but return 0 while not fully connected; consumer should check info().
+    except BluetoothCtlError:
+        raise
 
-    def __init__(self, timeout_sec: float = 12.0) -> None:
-        self._timeout_sec = timeout_sec
 
-    def _build_argv(self, *parts: str) -> list[str]:
-        # We prefer argv over shell strings to avoid shell quoting issues.
-        return ["bluetoothctl", *parts]
+async def disconnect(address: str, timeout: float = 6.0) -> None:
+    """Run bluetoothctl disconnect <address>."""
+    try:
+        rc, out, err = await _run_cmd("bluetoothctl", "disconnect", address, timeout=timeout)
+        if rc != 0:
+            _LOGGER.debug("bluetoothctl disconnect returned rc=%s out=%s err=%s", rc, out, err)
+            # not raising - disconnect best-effort
+    except BluetoothCtlError:
+        raise
 
-    async def _run(self, *parts: str) -> str:
-        """
-        Run a bluetoothctl command and return stdout text.
 
-        Raises:
-            BluetoothCtlTimeoutError, BluetoothCtlEnvError
-        """
-        argv = self._build_argv(*parts)
-        _LOGGER.debug("Running bluetoothctl: %s", " ".join(shlex.quote(p) for p in argv))
+async def scan(seconds: float = 8.0) -> List[Tuple[str, Optional[str]]]:
+    """Run `bluetoothctl scan on` for a few seconds and gather discovered devices (best-effort).
+
+    Note: scanning via bluetoothctl as a subprocess is best-effort; if bluetoothctl is not available,
+    this will raise.
+    """
+    # Start scanning (spawn bluetoothctl with "scan on" then sleep then run "devices")
+    # Simpler approach: run "bluetoothctl devices" after waiting; if device adverts, it will be present.
+    await _run_cmd("bluetoothctl", "scan", "on", timeout=2.0)
+    await asyncio.sleep(seconds)
+    try:
+        rc, out, err = await _run_cmd("bluetoothctl", "devices", timeout=4.0)
+    finally:
+        # turn scan off (best effort)
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *argv,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-            )
-            
-        except FileNotFoundError as exc:
-            raise BluetoothCtlEnvError("bluetoothctl komutu sistemde bulunamadı. Lütfen BlueZ kurulu olduğundan emin olun.") from exc
-        except Exception as exc:
-            raise BluetoothCtlEnvError(f"bluetoothctl başlatılamadı: {exc}") from exc
-            
-        try:
-            stdout_bytes, _ = await asyncio.wait_for(proc.communicate(), timeout=self._timeout_sec)
-        except asyncio.TimeoutError as exc:
-            with contextlib.suppress(Exception):
-                proc.kill()
-            raise BluetoothCtlTimeoutError("bluetoothctl command timed out") from exc
+            await _run_cmd("bluetoothctl", "scan", "off", timeout=2.0)
+        except Exception:
+            pass
 
-        output = stdout_bytes.decode("utf-8", errors="replace").strip()
-        _LOGGER.debug("bluetoothctl output:\n%s", output)
-        return output
-
-    @staticmethod
-    def _contains_any(haystack: str, needles: tuple[str, ...]) -> bool:
-        text = haystack.lower()
-        return any(n in text for n in needles)
-
-    @staticmethod
-    def _parse_yes_no(line: str) -> Optional[bool]:
-        # Expect lines like "Connected: yes/no"
-        parts = [p.strip() for p in line.split(":", 1)]
-        if len(parts) != 2:
-            return None
-        val = parts[1].strip().lower()
-        if val in ("yes", "true", "on"):
-            return True
-        if val in ("no", "false", "off"):
-            return False
-        return None
-
-    def _parse_info(self, mac: str, output: str) -> BtInfo:
-        info = BtInfo(raw=output)
-        for line in output.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            low = line.lower()
-            if low.startswith("device ") and mac.lower() in low:
-                info.address = mac
-            elif low.startswith("name:"):
-                info.name = line.split(":", 1)[1].strip()
-            elif low.startswith("connected:"):
-                info.connected = self._parse_yes_no(line)
-            elif low.startswith("paired:"):
-                info.paired = self._parse_yes_no(line)
-            elif low.startswith("trusted:"):
-                info.trusted = self._parse_yes_no(line)
-        return info
-
-    def _classify_common_errors(self, output: str) -> None:
-        low = output.lower()
-        if self._contains_any(low, PAIRING_HINTS):
-            raise BluetoothCtlPairingRequestedError("Pairing requested/required by device/controller")
-        if self._contains_any(low, NOT_FOUND_HINTS):
-            raise BluetoothCtlNotFoundError("Device not available or not found")
-
-    async def info(self, mac: str) -> BtInfo:
-        out = await self._run("info", mac)
-        # Some controllers print nothing for unknown devices; still classify
-        self._classify_common_errors(out)
-        # Parse best-effort
-        info = self._parse_info(mac, out)
-        return info
-
-    async def connect(self, mac: str) -> str:
-        out = await self._run("connect", mac)
-        self._classify_common_errors(out)
-        return out
-
-    async def disconnect(self, mac: str) -> str:
-        out = await self._run("disconnect", mac)
-        # disconnect often returns success even if not connected; still ok
-        self._classify_common_errors(out)
-        return out
-
-    async def power_off(self, mac: str | None = None) -> str:
-        """
-        Power off the controller or device where applicable.
-
-        Note: On many systems 'power off' affects the controller, not device.
-        Some devices expose device-specific power actions via different APIs.
-        We keep this as a best-effort, and still parse for pairing hints.
-        """
-        out = await self._run("power", "off")
-        self._classify_common_errors(out)
-        return out
-
-
-
-
+    results: List[Tuple[str, Optional[str]]] = []
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("Device"):
+            # "Device E0:B6:55:52:6C:00 Mi Box S"
+            parts = line.split(" ", 2)
+            if len(parts) >= 2:
+                addr = parts[1].strip()
+                name = parts[2].strip() if len(parts) >= 3 else None
+                results.append((addr, name))
+    return results
