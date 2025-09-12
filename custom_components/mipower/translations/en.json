@@ -4,8 +4,19 @@
     "step": {
       "user": {
         "title": "Configure MiPower",
-        "description": "Enter device MAC address and options"
+        "description": "Enter device MAC address and options. Choose backend: bluetoothctl (default) or bleak."
       }
     }
+  },
+  "entity": {
+    "name": "MiPower Switch",
+    "state_on": "On",
+    "state_off": "Off"
+  },
+  "options": {
+    "backend_label": "Backend",
+    "backend_description": "Choose communication backend (bluetoothctl or bleak).",
+    "mac_label": "MAC Address",
+    "name_label": "Display name"
   }
 }
