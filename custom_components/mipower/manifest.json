@@ -1,25 +1,17 @@
 {
   "domain": "mipower",
   "name": "MiPower",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "documentation": "https://github.com/DenizOner/MiPower",
   "issue_tracker": "https://github.com/DenizOner/MiPower/issues",
-  "codeowners": ["@frlequ, @ChatGPT, @DenizOner"],
-  "iot_class": "local_push",
-  "icon": "mdi:power-settings",
-  "loggers": ["custom_components.mipower"],
+  "codeowners": ["@frlequ", "@ChatGPT", "@DenizOner"],
+  "requirements": [
+    "bleak>=0.20.0",
+    "bleak-retry-connector>=2.14.1"
+  ],
   "dependencies": [],
-  "after_dependencies": [],
-  "requirements": ["bleak>=0.20.0"],
-  "integration_type": "hub",
+  "ssdp": [],
+  "iot_class": "local_push",
   "config_flow": true,
-  "quality_scale": "silver",
-  "min_homeassistant_version": "2024.8.0"
+  "homeassistant": "0.0.0"
 }
-
-
-
-
-
-
-
