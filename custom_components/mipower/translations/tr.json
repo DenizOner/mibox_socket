@@ -4,34 +4,20 @@
     "step": {
       "user": {
         "title": "MiPower yapılandırması",
-        "description": "Cihaz MAC adresini ve seçenekleri girin. Backend: bluetoothctl (varsayılan) veya bleak."
-      },
-      "pick_backend": {
-        "title": "Backend seçin",
-        "description": "İletişim backend'ini seçin. bluetoothctl host BlueZ kullanırken, bleak Python BLE kütüphanelerini kullanır."
+        "description": "Cihaz ismi ve MAC adresini girin. Backend ve seçenekleri seçin."
       }
     }
   },
-  "entity": {
-    "name": "MiPower Anahtarı",
-    "state_on": "Açık",
-    "state_off": "Kapalı"
-  },
   "options": {
+    "name_label": "Cihaz adı",
+    "mac_label": "MAC adresi",
+    "mac_help": "Cihazın MAC adresi (örnek: E0:B6:55:52:6C:00). Bu alan zorunludur.",
     "backend_label": "Backend",
-    "backend_description": "İletişim backend'ini seçin (bluetoothctl veya bleak).",
-    "mac_label": "MAC Adresi",
-    "name_label": "Görüntülenen isim",
-    "timeout_label": "Zaman aşımı (saniye)",
-    "retry_count_label": "Yeniden deneme sayısı",
-    "retry_delay_label": "Yeniden deneme gecikmesi (saniye)"
+    "scan_fallback_label": "Scan fallback etkinleştir",
+    "scan_fallback_help": "Connect başarısız olursa kısa bir tarama yapıp tekrar deneyin (varsayılan: kapalı)."
   },
   "error": {
-    "invalid_mac": "Geçersiz MAC adresi.",
-    "backend_not_available": "Seçilen backend hostta mevcut değil veya gerekli Python paketi eksik."
-  },
-  "diagnostics": {
-    "title": "MiPower tanılama",
-    "description": "MiPower entegrasyonu için çalışma zamanı tanılama bilgileri."
+    "invalid_mac": "Geçersiz MAC adresi",
+    "backend_not_available": "Seçilen backend mevcut değil"
   }
 }
