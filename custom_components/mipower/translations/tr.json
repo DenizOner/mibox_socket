@@ -4,8 +4,19 @@
     "step": {
       "user": {
         "title": "MiPower yapılandırması",
-        "description": "Cihaz MAC adresini ve seçenekleri girin"
+        "description": "Cihaz MAC adresini ve seçenekleri girin. Backend: bluetoothctl (varsayılan) veya bleak."
       }
     }
+  },
+  "entity": {
+    "name": "MiPower Anahtarı",
+    "state_on": "Açık",
+    "state_off": "Kapalı"
+  },
+  "options": {
+    "backend_label": "Backend",
+    "backend_description": "İletişim backend'ini seçin (bluetoothctl veya bleak).",
+    "mac_label": "MAC Adresi",
+    "name_label": "Görüntülenen isim"
   }
 }
