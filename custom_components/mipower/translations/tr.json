@@ -3,87 +3,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "MiPower",
-        "description": "Cihazınızın Bluetooth MAC adresini girin. İpucu: Muhtemelen E0:B6:55:**:**:** ile başlar",
-        "data": {
-          "name": "Cihaz adı",
-          "mac": "Bluetooth MAC adresi (AA:BB:CC:DD:EE:FF)"
-        }
-      }
-    },
-    "warning": {
-      "pairing_requested": "Cihaz/kontrolcü eşleşme istedi; {mac} için uyandırma iptal edildi"
-    },
-    "error": {
-      "invalid_mac": "Geçersiz MAC adresi formatı.",
-      "required": "Bu alan zorunludur.",
-      "out_of_range": "Değer izin verilen aralığın dışında.",
-      "invalid_option": "Geçersiz seçenek.",
-      "missing_bluetoothctl": "bluetoothctl bulunamadı. Lütfen BlueZ paketini kurun ve Home Assistant'ı yeniden başlatın. Örnek: Debian/Ubuntu: sudo apt install bluez. Docker kullanıyorsanız host üzerinde BlueZ/DBus ve uygun izinler gerekebilir."
-    }
-  },
-  "options": {
-    "step": {
-      "general": {
-        "title": "Genel",
-        "description": "Zaman aşımı, tekrar denemeler, disconnect gecikmesi ve polling anahtarı.",
-        "data": {
-          "timeout_sec": "Komut zaman aşımı (saniye)",
-          "retry_count": "Tekrar deneme sayısı",
-          "retry_delay_sec": "Tekrar deneme gecikmesi (saniye)",
-          "disconnect_delay_sec": "Uyandırma sonrası disconnect gecikmesi (saniye, adım 0.1)",
-          "polling_enabled": "Periyodik durum sorgulamayı etkinleştir"
-        }
-      },
-      "status": {
-        "title": "Durum ve Güç",
-        "description": "Polling aralığı veya media player yedek modu ve uyku davranışı.",
-        "data": {
-          "polling_interval_sec": "Polling aralığı (saniye)",
-          "media_player_entity_id": "Media Player (polling kapalıyken kullanılır)",
-          "sleep_command_type": "Uyku komutu (disconnect veya power_off)"
-        }
-      }
-    }
-  },
-  "component": {
-    "mipower": {
-      "services": {
-        "wake": {
-          "name": "Cihazı uyandır",
-          "description": "Cihaza uyandırma komutu gönderir.",
-          "fields": {
-            "mac": {
-              "name": "MAC adresi",
-              "description": "Hedef cihaz MAC."
-            }
-          }
-        },
-        "sleep": {
-          "name": "Cihazı uyut",
-          "description": "Cihaza uyutma komutu gönderir."
-        }
-      },
-      "config": {
-        "step": {
-          "user": {
-            "title": "MiPower Kurulumu",
-            "description": "Cihazı eklemek için MAC adresini girin.",
-            "data": {
-              "mac": "Cihaz MAC adresi"
-            }
-          }
-        },
-        "error": {
-          "invalid_mac": "MAC adres formatı geçersiz. Beklenen format: AA:BB:CC:DD:EE:FF.",
-          "cannot_connect": "Cihaza bağlanılamıyor. Açık olduğundan ve kapsama alanında olduğundan emin olun."
-        },
-        "abort": {
-          "already_configured": "Bu cihaz zaten yapılandırılmış."
-        }
-      },
-      "notification": {
-        "missing_bluetoothctl": "bluetoothctl bulunamadı. Lütfen BlueZ paketini kurun ve Home Assistant'ı yeniden başlatın. Debian/Ubuntu: sudo apt install bluez. Docker: Host üzerinde BlueZ/DBus ve uygun izinler gerekli."
+        "title": "MiPower yapılandırması",
+        "description": "Cihaz MAC adresini ve seçenekleri girin"
       }
     }
   }
