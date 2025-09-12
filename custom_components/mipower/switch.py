@@ -1,399 +1,194 @@
-"""MiPower switch platform.
+"""MiPower Switch entity.
 
-- SwitchEntity kullanır (UI'de tek bir toggle görünür).
-- bluetoothctl (BlueZ CLI) öncelikli backend olarak seçildi.
-- Cihaz kapalıyken entity 'available' True kalır; is_on False döner (UI 'off' görünsün).
-- Hatalar `extra_state_attributes["last_error"]` içinde gösterilir.
+This file provides the SwitchEntity that controls/wakes/sleeps the target device.
+It is backend-agnostic: uses either bluetoothctl wrapper or bleak wrapper depending on config.
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable, Coroutine, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    STATE_ON,
-    STATE_PLAYING,
-    STATE_IDLE,
-    CONF_NAME,
-)
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.event import async_track_state_change_event
-from homeassistant.helpers.typing import StateType
 
-from .bluetoothctl import (
-    BluetoothCtlClient,
-    BluetoothCtlError,
-    BluetoothCtlTimeoutError,
-    BluetoothCtlNotFoundError,
-    BluetoothCtlPairingRequestedError,
-)
-from .coordinator import MiPowerCoordinator
 from .const import (
     DOMAIN,
-    DEFAULT_ENTITY_ICON,
     CONF_MAC,
+    CONF_NAME,
+    CONF_BACKEND,
     CONF_MEDIA_PLAYER_ENTITY_ID,
-    CONF_TIMEOUT_SEC,
-    CONF_RETRY_COUNT,
-    CONF_RETRY_DELAY_SEC,
-    CONF_POLLING_ENABLED,
-    CONF_POLLING_INTERVAL_SEC,
-    CONF_DISCONNECT_DELAY_SEC,
-    CONF_SLEEP_COMMAND_TYPE,
-    DEFAULT_TIMEOUT_SEC,
+    BACKEND_BLUETOOTHCTL,
+    BACKEND_BLEAK,
+    DEFAULT_BACKEND,
     DEFAULT_RETRY_COUNT,
     DEFAULT_RETRY_DELAY_SEC,
-    DEFAULT_POLLING_ENABLED,
-    DEFAULT_POLLING_INTERVAL_SEC,
     DEFAULT_DISCONNECT_DELAY_SEC,
-    SLEEP_CMD_DISCONNECT,
-    SLEEP_CMD_POWER_OFF,
+    DEFAULT_POLLING_ENABLED,
 )
+from . import bluetoothctl as bluetoothctl_mod
+from . import bleak as bleak_mod
 
 _LOGGER = logging.getLogger(__name__)
 
-SERVICE_WAKE = "wake_device"
-SERVICE_SLEEP = "sleep_device"
+PLATFORMS = ["switch"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
-    """Set up MiPower switch platform from a config entry."""
-    mac = entry.data[CONF_MAC]
-
+    """Set up switch from config entry."""
+    data = entry.data
     options = entry.options or {}
-    timeout_sec = float(options.get(CONF_TIMEOUT_SEC, DEFAULT_TIMEOUT_SEC))
-    retry_count = int(options.get(CONF_RETRY_COUNT, DEFAULT_RETRY_COUNT))
-    retry_delay_sec = float(options.get(CONF_RETRY_DELAY_SEC, DEFAULT_RETRY_DELAY_SEC))
-    polling_enabled = bool(options.get(CONF_POLLING_ENABLED, DEFAULT_POLLING_ENABLED))
-    polling_interval_sec = float(
-        options.get(CONF_POLLING_INTERVAL_SEC, DEFAULT_POLLING_INTERVAL_SEC)
-    )
-    disconnect_delay_sec = float(
-        options.get(CONF_DISCONNECT_DELAY_SEC, DEFAULT_DISCONNECT_DELAY_SEC)
-    )
+
+    mac = data.get(CONF_MAC)
+    name = data.get(CONF_NAME) or options.get(CONF_NAME) or f"MiPower {mac}"
+    backend = options.get(CONF_BACKEND, data.get(CONF_BACKEND, DEFAULT_BACKEND))
     media_player_entity_id = options.get(CONF_MEDIA_PLAYER_ENTITY_ID)
-    sleep_cmd_type = options.get(CONF_SLEEP_COMMAND_TYPE, SLEEP_CMD_DISCONNECT)
 
-    def client_factory() -> BluetoothCtlClient:
-        """Return preferred client (bluetoothctl first, bleak fallback)."""
-        try:
-            return BluetoothCtlClient(timeout_sec=timeout_sec)
-        except Exception as exc:
-            _LOGGER.debug("bluetoothctl client not usable: %s — will try Bleak", exc)
-
-        try:
-            from .bleak import BleakClient  # type: ignore
-        except Exception:
-            BleakClient = None  # type: ignore
-
-        if BleakClient is not None:
-            try:
-                return BleakClient(timeout_sec=timeout_sec)  # type: ignore
-            except BluetoothCtlError as exc:
-                _LOGGER.debug("Bleak backend present but unusable: %s", exc)
-
-        raise BluetoothCtlError("No usable bluetooth backend (bluetoothctl nor bleak)")
-
-    coordinator: Optional[MiPowerCoordinator] = None
-    if polling_enabled:
-        coordinator = MiPowerCoordinator(
-            hass, mac=mac, client_factory=client_factory, interval_sec=polling_interval_sec
-        )
-        await coordinator.async_config_entry_first_refresh()
+    # client factory selects backend at runtime
+    def client_factory():
+        if backend == BACKEND_BLUETOOTHCTL:
+            return "bluetoothctl"
+        return "bleak"
 
     switch = MiPowerSwitch(
         hass=hass,
         entry=entry,
-        entry_id=entry.entry_id,
         mac=mac,
+        name=name,
         client_factory=client_factory,
-        retry_count=retry_count,
-        retry_delay_sec=retry_delay_sec,
-        disconnect_delay_sec=disconnect_delay_sec,
-        polling_enabled=polling_enabled,
+        backend=backend,
         media_player_entity_id=media_player_entity_id,
-        sleep_cmd_type=sleep_cmd_type,
-        coordinator=coordinator,
     )
 
-    async_add_entities([switch])
+    async_add_entities([switch], update_before_add=True)
 
 
 class MiPowerSwitch(SwitchEntity):
-    """MiPower switch entity."""
-
-    _attr_has_entity_name = False
-    _attr_icon = DEFAULT_ENTITY_ICON
+    """Single toggle switch for MiPower."""
 
     def __init__(
         self,
         hass: HomeAssistant,
         entry: ConfigEntry,
-        entry_id: str,
         mac: str,
-        client_factory: Callable[[], BluetoothCtlClient],
-        retry_count: int,
-        retry_delay_sec: float,
-        disconnect_delay_sec: float,
-        polling_enabled: bool,
-        media_player_entity_id: Optional[str],
-        sleep_cmd_type: str,
-        coordinator: Optional[MiPowerCoordinator] = None,
+        name: str,
+        client_factory: Callable[[], str],
+        backend: str,
+        media_player_entity_id: Optional[str] = None,
     ) -> None:
         self.hass = hass
-        self._entry_id = entry_id
+        self._entry = entry
         self._mac = mac
+        self._name = name
         self._client_factory = client_factory
-        self._retry_count = retry_count
-        self._retry_delay_sec = retry_delay_sec
-        self._disconnect_delay_sec = disconnect_delay_sec
-        self._polling_enabled = polling_enabled
+        self._backend = backend
         self._media_player_entity_id = media_player_entity_id
-        self._sleep_cmd_type = sleep_cmd_type
-        self._coordinator = coordinator
 
         sanitized_mac = str(self._mac).lower().replace(":", "_")
         self._attr_unique_id = f"{DOMAIN}_{sanitized_mac}"
+        self._attr_name = name
+        self._attr_icon = "mdi:power-settings"
 
-        given_name: str = entry.data.get(CONF_NAME, f"MiPower {sanitized_mac}")
-        self._given_name = given_name
-        self._attr_name = given_name
-
-        # Important: start with False so UI shows 'off' instead of 'unknown'
-        self._attr_available = True
-        self._is_on_cached: Optional[bool] = False
-        self._unsub_media_listener = None
-
+        self._available = True
+        # cache boolean state; start with False so UI shows off rather than unknown
+        self._is_on_cached: bool = False
         self._last_error: Optional[str] = None
 
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
             identifiers={(DOMAIN, self._mac)},
-            name=self._given_name,
-            manufacturer="Xiaomi / Bluetooth",
+            name=self._name,
+            manufacturer="Custom Integration",
             model="MiPower",
         )
 
     @property
     def is_on(self) -> bool:
-        """Return True if device considered on.
-
-        Priority:
-         1) Coordinator (polling) data if enabled
-         2) Media player mapping if polling disabled and media player set
-         3) Cached value (default False)
-        """
-        if self._polling_enabled and self._coordinator:
-            # Only trust coordinator if it has data
-            if self._coordinator.data is not None:
-                conn = self._coordinator.data.get("connected")
-                return bool(conn) if conn is not None else False
-            return False
-
-        if self._media_player_entity_id:
-            st = self.hass.states.get(self._media_player_entity_id)
-            if st:
-                return self._map_media_state_to_on(st.state)
-
-        # Default to False (not on) if unknown
+        """Return on/off state."""
+        # Prefer cached boolean; external polling/coordinator can update
         return bool(self._is_on_cached)
-
-    def _map_media_state_to_on(self, state: StateType) -> bool:
-        return str(state) in (STATE_ON, STATE_PLAYING, STATE_IDLE)
-
-    async def async_added_to_hass(self) -> None:
-        if not self._polling_enabled and self._media_player_entity_id:
-            st = self.hass.states.get(self._media_player_entity_id)
-            if st:
-                self._is_on_cached = self._map_media_state_to_on(st.state)
-
-            self._unsub_media_listener = async_track_state_change_event(
-                self.hass, [self._media_player_entity_id], self._handle_media_state_event
-            )
-
-    async def async_will_remove_from_hass(self) -> None:
-        if self._unsub_media_listener:
-            try:
-                self._unsub_media_listener()
-            except Exception:
-                _LOGGER.debug("Error while unsubscribing media listener", exc_info=True)
-        self._unsub_media_listener = None
-
-    @callback
-    def _handle_media_state_event(self, event) -> None:
-        new_state = event.data.get("new_state")
-        if new_state:
-            self._is_on_cached = self._map_media_state_to_on(new_state.state)
-            self.async_write_ha_state()
-
-    async def _retrying(self, coro_factory: Callable[[], Coroutine[Any, Any, Any]]) -> Any:
-        attempt = 0
-        while True:
-            try:
-                return await coro_factory()
-            except (BluetoothCtlTimeoutError, BluetoothCtlNotFoundError) as exc:
-                attempt += 1
-                if attempt > self._retry_count:
-                    _LOGGER.warning(
-                        "Operation failed for %s after %s attempts: %s",
-                        self._mac,
-                        attempt,
-                        exc,
-                    )
-                    raise
-                _LOGGER.debug(
-                    "Operation failed (%s). Retrying %s/%s in %.1fs",
-                    exc,
-                    attempt,
-                    self._retry_count,
-                    self._retry_delay_sec,
-                )
-                await asyncio.sleep(self._retry_delay_sec)
-
-    async def _do_info(self) -> Dict[str, Any]:
-        client = self._client_factory()
-        info = await client.info(self._mac)
-
-        if isinstance(info, dict):
-            return {
-                "connected": info.get("connected"),
-                "paired": info.get("paired"),
-                "trusted": info.get("trusted"),
-                "name": info.get("name"),
-                "address": info.get("address"),
-                "raw": info.get("raw"),
-            }
-
-        return {
-            "connected": getattr(info, "connected", None),
-            "paired": getattr(info, "paired", None),
-            "trusted": getattr(info, "trusted", None),
-            "name": getattr(info, "name", None),
-            "address": getattr(info, "address", None),
-            "raw": getattr(info, "raw", None),
-        }
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         attrs: Dict[str, Any] = {}
         if self._last_error:
             attrs["last_error"] = self._last_error
-        if self._coordinator is not None:
-            attrs["coordinator_last_update_success"] = getattr(self._coordinator, "last_update_success", None)
+        attrs["backend"] = self._backend
+        attrs["mac"] = self._mac
         return attrs
 
-    async def _wake_sequence(self) -> bool:
+    async def async_update(self) -> None:
+        """Fetch current device status (best-effort)."""
         try:
-            info_before = await self._retrying(lambda: self._do_info())
-            if info_before.get("connected") is True:
-                _LOGGER.info("Device %s already connected/awake; no-op", self._mac)
-                return True
-
-            client = self._client_factory()
-
-            try:
-                await self._retrying(lambda: client.connect(self._mac))
-            except BluetoothCtlPairingRequestedError:
-                _LOGGER.warning("Pairing requested; aborting wake for %s", self._mac)
-                return False
-            except BluetoothCtlError as exc:
-                _LOGGER.warning("Primary backend connect failed for %s: %s. Trying bluetoothctl fallback.", self._mac, exc)
-                try:
-                    fallback_client = BluetoothCtlClient(timeout_sec=self._disconnect_delay_sec or 12.0)
-                    await self._retrying(lambda: fallback_client.connect(self._mac))
-                    client = fallback_client
-                except BluetoothCtlPairingRequestedError:
-                    _LOGGER.warning("Pairing requested during fallback; aborting wake for %s", self._mac)
-                    return False
-                except Exception as exc2:
-                    _LOGGER.error("Fallback bluetoothctl connect also failed for %s: %s", self._mac, exc2)
-                    return False
-
-            await asyncio.sleep(self._disconnect_delay_sec)
-
-            try:
-                await self._retrying(lambda: client.disconnect(self._mac))
-            except BluetoothCtlError:
-                _LOGGER.debug("Disconnect after wake failed; continuing (best-effort).")
-
-            info_after = await self._retrying(lambda: self._do_info())
-            _ = info_after.get("connected")
-            return True
-
-        except BluetoothCtlPairingRequestedError:
-            _LOGGER.warning("Pairing requested; abort wake for %s", self._mac)
-            return False
-        except (BluetoothCtlTimeoutError, BluetoothCtlNotFoundError) as exc:
-            _LOGGER.warning("Wake failed for %s: %s", self._mac, exc)
-            return False
-        except BluetoothCtlError as exc:
-            _LOGGER.error("Wake error for %s: %s", self._mac, exc)
-            return False
-        except Exception as exc:
-            _LOGGER.error("Unexpected wake error for %s: %s", self._mac, exc)
-            return False
-
-    async def _sleep_sequence(self) -> bool:
-        client = self._client_factory()
-        try:
-            if self._sleep_cmd_type == SLEEP_CMD_POWER_OFF:
-                try:
-                    await self._retrying(lambda: client.power_off(None))
-                except BluetoothCtlPairingRequestedError:
-                    _LOGGER.warning("Pairing requested on power_off; aborting sleep for %s", self._mac)
-                    return False
+            if self._backend == BACKEND_BLUETOOTHCTL:
+                info = await bluetoothctl_mod.info(self._mac)
+                connected_raw = info.get("connected")
+                self._is_on_cached = connected_raw in (True, "yes", "true", "1", "True")
             else:
-                await self._retrying(lambda: client.disconnect(self._mac))
-
-            info = await self._retrying(lambda: self._do_info())
-            connected = info.get("connected")
-            return (connected is False) or (connected is None)
-
-        except (BluetoothCtlTimeoutError, BluetoothCtlNotFoundError) as exc:
-            _LOGGER.warning("Sleep failed for %s: %s", self._mac, exc)
-            return False
-        except BluetoothCtlError as exc:
-            _LOGGER.error("Sleep error for %s: %s", self._mac, exc)
-            return False
+                info = await bleak_mod.info(self._mac)
+                self._is_on_cached = info.get("connected", False)
+            self._last_error = None
         except Exception as exc:
-            _LOGGER.error("Unexpected sleep error for %s: %s", self._mac, exc)
-            return False
+            self._last_error = str(exc)
+            # keep old cached value; mark available True so UI can toggle
+            _LOGGER.debug("async_update exception for %s: %s", self._mac, exc)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        """Wake / connect to the device."""
+        self._last_error = None
         try:
-            ok = await self._wake_sequence()
-            if ok:
-                self._is_on_cached = True
-                self._last_error = None
+            if self._backend == BACKEND_BLUETOOTHCTL:
+                # First attempt: direct connect
+                await bluetoothctl_mod.connect(self._mac)
+                # small pause to let BlueZ update state
+                await asyncio.sleep(1.0)
+                info = await bluetoothctl_mod.info(self._mac)
+                connected_raw = info.get("connected")
+                self._is_on_cached = connected_raw in (True, "yes", "true", "1", "True")
             else:
-                self._last_error = "Wake sequence failed (device may be powered off or unreachable)."
+                # Bleak path: get client via bleak.connect (which may use retry connector)
+                client = await bleak_mod.connect(self._mac)
+                # if we have a client, assume device awake; then disconnect after short wait
+                try:
+                    await asyncio.sleep(1.0)
+                    self._is_on_cached = await client.is_connected()
+                finally:
+                    await bleak_mod.disconnect(client)
         except Exception as exc:
-            _LOGGER.exception("Error during async_turn_on for %s", self._mac)
-            self._last_error = f"Exception during wake: {exc}"
+            _LOGGER.warning("Wake failed for %s: %s", self._mac, exc)
+            self._last_error = str(exc)
+            # Keep cached state unchanged
         finally:
             self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        """Sleep / disconnect."""
+        self._last_error = None
         try:
-            ok = await self._sleep_sequence()
-            if ok:
-                self._is_on_cached = False
-                self._last_error = None
+            if self._backend == BACKEND_BLUETOOTHCTL:
+                await bluetoothctl_mod.disconnect(self._mac)
+                await asyncio.sleep(0.6)
+                info = await bluetoothctl_mod.info(self._mac)
+                connected_raw = info.get("connected")
+                self._is_on_cached = connected_raw in (True, "yes", "true", "1", "True")
+                if self._is_on_cached:
+                    # still connected -> treat as off attempt failed
+                    self._last_error = "Disconnect reported still connected"
             else:
-                self._last_error = "Sleep sequence failed (device may be unreachable)."
+                # For Bleak, attempt a direct connection then disconnect (best-effort)
+                try:
+                    client = await bleak_mod.connect(self._mac)
+                except Exception:
+                    client = None
+                if client:
+                    await bleak_mod.disconnect(client)
+                    self._is_on_cached = False
         except Exception as exc:
-            _LOGGER.exception("Error during async_turn_off for %s", self._mac)
-            self._last_error = f"Exception during sleep: {exc}"
+            _LOGGER.warning("Sleep failed for %s: %s", self._mac, exc)
+            self._last_error = str(exc)
         finally:
             self.async_write_ha_state()
-
-    async def async_service_wake(self) -> None:
-        await self.async_turn_on()
-
-    async def async_service_sleep(self) -> None:
-        await self.async_turn_off()
