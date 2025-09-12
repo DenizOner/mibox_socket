@@ -6,42 +6,36 @@
 [![Release](https://img.shields.io/github/v/release/DenizOner/MiPower?display_name=tag)](https://github.com/DenizOner/MiPower/releases)
 [![Downloads](https://img.shields.io/github/downloads/DenizOner/MiPower/total.svg)](https://github.com/DenizOner/MiPower/releases)
 
-MiPower, Android TV / Mi Box tarzı cihazları Bluetooth üzerinden "wake" / "sleep" yapmaya odaklı bir Home Assistant eklentisidir.
-Bu proje hem `bluetoothctl` (BlueZ CLI) hem de `bleak` tabanlı backend'leri destekler. İlk kurulumda varsayılan backend `bluetoothctl`'dir (tercih edilebilir).
+MiPower is a Home Assistant custom integration that aims to wake / sleep Android TV / Mi Box style devices over Bluetooth.
+It supports both `bluetoothctl` (BlueZ CLI on the host) and `bleak` (Python BLE client) backends.
 
-## Öne çıkan özellikler
-- Wake (açma) ve Sleep (uyku / disconnect) işlemleri.
-- Hem `bluetoothctl` hem `bleak` backend desteği (kullanıcı seçimi).
-- Cihazın durumu (connected/unreachable) için polling ve fallback mantığı.
-- UI üzerinde tek bir toggle switch (kullanıcının verdiği isim kullanılır).
+## Quick features
+- Toggle device (wake via connect / sleep via disconnect).
+- Two backends: `bluetoothctl` (default) and `bleak` (user-selectable).
+- Optional polling for device reachability.
+- Single toggle switch using the name you set.
 
-## Gereksinimler
-- Home Assistant (Home Assistant OS, Supervised veya Core).
-- Eğer `bluetoothctl` backend kullanılacaksa, ana sistemde `bluetoothctl` bulunmalı ve hass host tarafında Bluetooth erişimi olmalıdır.
-- `bleak` ve `bleak-retry-connector` Python paketleri manifest.json aracılığıyla yüklenecektir.
+## Installation
+1. Place the `mipower` folder into `config/custom_components/`.
+2. Restart Home Assistant.
+3. Integrations -> Add Integration -> “MiPower”. Provide the device MAC and choose backend.
 
-## Kurulum
-1. `config/custom_components/mipower/` altına ilgili dosyaları kopyalayın.
-2. Home Assistant'ı yeniden başlatın.
-3. Settings → Integrations → Add Integration → "MiPower" ile ekleyin.
-   - MAC adresini girin.
-   - Backend seçimini yapın (`bluetoothctl` varsayılan).
-   - İsteğe bağlı: Display name, polling, media_player fallback vb.
+## Backend notes
+- `bluetoothctl` backend requires `bluetoothctl` available on the host system (Home Assistant OS, supervised host, or add-on).
+- `bleak` requires Python packages (`bleak`, `bleak-retry-connector`), which are declared in `manifest.json` and will be installed automatically by HA when the integration is loaded.
 
-_Eklenti kurulumu sonrası Home Assistant tüm gereksinimleri (manifest.json içindeki `requirements`) kuracaktır._
+## Safety & pairing
+- This integration **does not perform `pair`** or attempt to modify device pairing to avoid triggering device UI pairing prompts.
+- We use `connect`/`disconnect` or a short BLE probe to wake devices. In some devices, pairing or host-side permissions may still be required.
 
-## Pairing ve gizlilik uyarısı
-Bu entegrasyon **otomatik olarak `pair` komutunu çalıştırmaz**. Amacımız cihazın ekranında pairing / PIN isteklerinin açılmasını engellemektir. Bu yüzden:
-- Wake için `connect`/`disconnect` komutları ya da Bleak bağlantısı kullanılır.
-- Eğer cihaz, başka bir host/telefon ile eşleşmişse veya cihaz pairing gerektiriyorsa kullanıcı müdahalesi gerekebilir.
+## Troubleshooting
+- If the integration fails to behave as expected, check: Settings -> System -> Logs for `custom_components.mipower`.
+- If using `bluetoothctl`, the host must have Bluetooth enabled and the user running the HA process must have permission to use BlueZ.
+- If HACS says "pending restart" but you see no notification, manually restarting Home Assistant is always safe and will load new code.
 
-## Lisans
-Bu proje, yazarın isteğine göre **CC0 1.0 Universal (Public Domain Dedication)** olarak beyan edilmiştir — yani proje üzerinde sınırlama olmadan değişiklik yapabilir, çoğaltabilir ve dağıtabilirsiniz. (Burada dosya eklenmedi; README'de lisans belirtildi.)
+## License
+Author has chosen **CC0 1.0 Universal (Public Domain Dedication)** for this project. No separate LICENSE file is included per project owner request.
 
-## Hata ayıklama ve loglar
-- Settings → System → Logs bölümünden entegrasyon loglarını izleyin.
-- Eğer `bluetoothctl` backend seçili ise Terminal add-on ile `bluetoothctl devices` çıkışını karşılaştırabilirsiniz.
-
----
-
-Geliştirici notu: eklenti hem taşınabilir hem de BlueZ-hosted sistemlerde çalışacak şekilde tasarlandı. Eğer cihazın `ble` stack'ine dair özel servis/karakteristik bilgisi varsa (ör. MiBox özel bir GATT servisi) bunun entegrasyona eklenmesi ile durum tespiti daha sağlam olur.
+## Developer notes
+- The integration avoids blocking the Home Assistant event loop by using asyncio subprocess for `bluetoothctl` calls.
+- Extensive debug logs are available under logger `custom_components.mipower`.
