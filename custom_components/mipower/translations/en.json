@@ -3,87 +3,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "MiPower",
-        "description": "Enter your device's Bluetooth MAC address. Tip: likely starts with E0:B6:55:**:**:**",
-        "data": {
-          "name": "Device name",
-          "mac": "Bluetooth MAC address (AA:BB:CC:DD:EE:FF)"
-        }
-      }
-    },
-    "warning": {
-      "pairing_requested": "Device/controller requested pairing; wake aborted for {mac}"
-    },
-    "error": {
-      "invalid_mac": "Invalid MAC address format.",
-      "required": "This field is required.",
-      "out_of_range": "Value is out of the allowed range.",
-      "invalid_option": "Invalid option.",
-      "missing_bluetoothctl": "bluetoothctl not found. Please install the BlueZ package and restart Home Assistant. Example: Debian/Ubuntu: sudo apt install bluez. If using Docker, host must provide BlueZ/DBus and appropriate permissions."
-    }
-  },
-  "options": {
-    "step": {
-      "general": {
-        "title": "General",
-        "description": "Timeouts, retry attempts, disconnect delay and the polling toggle.",
-        "data": {
-          "timeout_sec": "Command timeout (seconds)",
-          "retry_count": "Retry count",
-          "retry_delay_sec": "Retry delay (seconds)",
-          "disconnect_delay_sec": "Disconnect delay after wake (seconds, step 0.1)",
-          "polling_enabled": "Enable periodic status polling"
-        }
-      },
-      "status": {
-        "title": "Status & Power",
-        "description": "Polling interval or media player fallback, and sleep behavior.",
-        "data": {
-          "polling_interval_sec": "Polling interval (seconds)",
-          "media_player_entity_id": "Media player (used when polling is disabled)",
-          "sleep_command_type": "Sleep command (disconnect or power_off)"
-        }
-      }
-    }
-  },
-  "component": {
-    "mipower": {
-      "services": {
-        "wake": {
-          "name": "Wake device",
-          "description": "Send wake command to the device.",
-          "fields": {
-            "mac": {
-              "name": "MAC address",
-              "description": "Target device MAC."
-            }
-          }
-        },
-        "sleep": {
-          "name": "Put device to sleep",
-          "description": "Send sleep command to the device."
-        }
-      },
-      "config": {
-        "step": {
-          "user": {
-            "title": "MiPower Setup",
-            "description": "Enter the MAC address to add the device.",
-            "data": {
-              "mac": "Device MAC address"
-            }
-          }
-        },
-        "error": {
-          "invalid_mac": "MAC address format invalid. Expected format: AA:BB:CC:DD:EE:FF.",
-          "cannot_connect": "Cannot connect to the device. Make sure it is powered on and within range."
-        },
-        "abort": {
-          "already_configured": "This device is already configured."
-        }
-      },
-      "notification": {
-        "missing_bluetoothctl": "bluetoothctl not found. Please install the BlueZ package and restart Home Assistant. Debian/Ubuntu: sudo apt install bluez. Docker: host must provide BlueZ/DBus and appropriate permissions."
+        "title": "Configure MiPower",
+        "description": "Enter device MAC address and options"
       }
     }
   }
