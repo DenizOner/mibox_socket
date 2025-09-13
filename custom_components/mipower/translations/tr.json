@@ -14,7 +14,10 @@
     "mac_help": "Cihazın MAC adresi (örnek: E0:B6:55:52:6C:00). Bu alan zorunludur.",
     "backend_label": "Backend",
     "scan_fallback_label": "Scan fallback etkinleştir",
-    "scan_fallback_help": "Connect başarısız olursa kısa bir tarama yapıp tekrar deneyin (varsayılan: kapalı)."
+    "scan_fallback_help": "Connect başarısız olursa kısa bir tarama yapıp tekrar deneyin (varsayılan: kapalı).",
+    "timeout_label": "Zaman aşımı (saniye)",
+    "retry_count_label": "Tekrar deneme sayısı",
+    "retry_delay_label": "Tekrar deneme gecikmesi (saniye)"
   },
   "error": {
     "invalid_mac": "Geçersiz MAC adresi",
