@@ -4,14 +4,10 @@
   "version": "0.2.0",
   "documentation": "https://github.com/DenizOner/MiPower",
   "issue_tracker": "https://github.com/DenizOner/MiPower/issues",
-  "codeowners": ["@frlequ", "@ChatGPT", "@DenizOner"],
-  "requirements": [
-    "bleak>=0.20.0",
-    "bleak-retry-connector>=2.14.1"
-  ],
+  "codeowners": ["@frlequ, @ChatGPT, @DenizOner"],
+  "requirements": ["bleak>=0.20.0", "bleak-retry-connector>=2.14.1"],
   "dependencies": [],
-  "ssdp": [],
   "iot_class": "local_push",
-  "config_flow": true,
-  "homeassistant": "0.0.0"
+  "homeassistant": "0.0.0",
+  "config_flow": true
 }
