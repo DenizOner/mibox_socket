@@ -1,11 +1,5 @@
-"""MiPower switch - updated.
+"""MiPower switch platform."""
 
-Notes:
-- Fixes mappingproxy hass.data issue.
-- Adds scan_fallback (option, default False).
-- bluetoothctl + bleak backends.
-- Debounce + optimistic + confirm flow.
-"""
 from __future__ import annotations
 
 import asyncio
@@ -34,10 +28,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-
 def _ensure_hass_data_dict(hass: HomeAssistant) -> dict:
-    """Ensure hass.data[DOMAIN] is a plain dict we can mutate."""
-    # If DOMAIN is not present or is not a dict (mappingproxy etc.), replace with a new dict.
     existing = hass.data.get(DOMAIN)
     if existing is None or not isinstance(existing, dict):
         hass.data[DOMAIN] = {}
@@ -45,27 +36,17 @@ def _ensure_hass_data_dict(hass: HomeAssistant) -> dict:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities):
-    """Set up MiPower switch entity from a config entry."""
+    """Set up switch for the config entry."""
     data = entry.data or {}
     opts = entry.options or {}
-
     mac = data.get(CONF_MAC)
     name = entry.title or opts.get(CONF_NAME) or f"MiPower {mac}"
-
     backend = opts.get(CONF_BACKEND, data.get(CONF_BACKEND, DEFAULT_BACKEND))
     scan_fallback = entry.options.get("scan_fallback", False)
 
-    entity = MiPowerSwitch(
-        hass=hass,
-        entry=entry,
-        name=name,
-        mac=mac,
-        backend=backend,
-        scan_fallback=bool(scan_fallback),
-    )
-
+    entity = MiPowerSwitch(hass=hass, entry=entry, name=name, mac=mac, backend=backend, scan_fallback=bool(scan_fallback))
     async_add_entities([entity], update_before_add=False)
-    _LOGGER.debug("MiPower switch created for %s (backend=%s scan_fallback=%s)", mac, backend, scan_fallback)
+    _LOGGER.debug("Added MiPower switch for %s (backend=%s scan_fallback=%s)", mac, backend, scan_fallback)
 
 
 class MiPowerSwitch(SwitchEntity):
@@ -87,13 +68,12 @@ class MiPowerSwitch(SwitchEntity):
         self._retry_count = entry.options.get("retry_count", DEFAULT_RETRY_COUNT)
         self._retry_delay = entry.options.get("retry_delay_sec", DEFAULT_RETRY_DELAY_SEC)
 
-        # ensure mutable hass.data[DOMAIN]
         store = _ensure_hass_data_dict(hass)
         store.setdefault(entry.entry_id, {})
         store_entry = store[entry.entry_id]
-        store_entry.setdefault("last_attempts", [])  # keep list of last tries
-
+        store_entry.setdefault("last_attempts", [])
         self._store = store_entry
+
         self._unique_id = f"mipower_{self._mac.replace(':','').lower()}"
         self._entity_icon = "mdi:power"
 
@@ -130,7 +110,6 @@ class MiPowerSwitch(SwitchEntity):
         rec = {"ts": time.time(), "success": bool(success), "details": details}
         lst = self._store.setdefault("last_attempts", [])
         lst.insert(0, rec)
-        # keep only last 20
         if len(lst) > 20:
             del lst[20:]
 
@@ -146,7 +125,6 @@ class MiPowerSwitch(SwitchEntity):
             return
         self._last_user_action_ts = now
 
-        # optimistic
         self._set_state_and_publish(True)
         self.hass.async_create_task(self._attempt_wake())
 
@@ -180,7 +158,6 @@ class MiPowerSwitch(SwitchEntity):
                     else:
                         last_err = f"rc={rc} out={out!r} err={err!r}"
                         _LOGGER.debug("bluetoothctl connect attempt %d failed: %s", attempts, last_err)
-                        # If not available and scan_fallback enabled, try short scan then connect
                         if "not available" in out_l and self._scan_fallback:
                             _LOGGER.debug("Attempting short scan fallback for %s", mac)
                             await self._bluetoothctl_command(["scan", "on"], timeout=1.5)
@@ -212,7 +189,6 @@ class MiPowerSwitch(SwitchEntity):
             if reachable:
                 self._set_state_and_publish(True)
             else:
-                # schedule confirm in a few seconds
                 async_call_later(self.hass, 6, self._confirm_off_if_unreachable)
                 self._set_state_and_publish(True)
         else:
@@ -281,20 +257,38 @@ class MiPowerSwitch(SwitchEntity):
     async def _bluetoothctl_connect(self, mac: str, timeout: float = 8.0):
         return await self._bluetoothctl_command(["connect", mac], timeout=timeout)
 
-    # Bleak helpers (best-effort)
+    # Bleak helpers: use bleak-retry-connector if available
     async def _bleak_connect_once(self, mac: str, timeout: float = 8.0):
         try:
             from bleak import BleakClient
         except Exception as exc:
             return False, f"bleak not installed: {exc}"
+
+        # Try bleak-retry-connector if available
         try:
-            client = BleakClient(mac, timeout=timeout)
-            await client.connect()
-            await asyncio.sleep(0.25)
-            await client.disconnect()
-            return True, None
-        except Exception as exc:
-            return False, str(exc)
+            from bleak_retry_connector import establish_connection
+        except Exception:
+            establish_connection = None
+
+        if establish_connection:
+            try:
+                client = await establish_connection(BleakClient, mac, timeout=timeout)
+                # establish_connection returns a connected client
+                await asyncio.sleep(0.2)
+                await client.disconnect()
+                return True, None
+            except Exception as exc:
+                return False, f"bleak_retry_connector error: {exc}"
+        else:
+            # fallback to plain BleakClient
+            try:
+                client = BleakClient(mac, timeout=timeout)
+                await client.connect()
+                await asyncio.sleep(0.25)
+                await client.disconnect()
+                return True, None
+            except Exception as exc:
+                return False, str(exc)
 
     async def _bleak_disconnect_once(self, mac: str, timeout: float = 5.0):
         ok, msg = await self._bleak_connect_once(mac, timeout=timeout)
